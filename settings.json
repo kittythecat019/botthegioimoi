@@ -1,0 +1,60 @@
+    {
+      "bot-account": {
+        "username": "bot",
+        "password": "",
+        "type": "offline"
+      },
+
+      "server": {
+        "ip": "choichung_vn.aternos.me",
+        "port": 19013,
+        "version": "1.21.8"
+      },
+
+      "position": {
+        "enabled": true,
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+
+      "utils": {
+        "auto-auth": {
+          "enabled": true,
+          "password": ""
+        },
+
+        "anti-afk": {
+          "enabled": true,
+          "sneak": true,
+          "jump": true,
+          "rotate": true,
+
+          "hit": {
+            "enabled": true,
+            "delay": 5000,
+            "attack-mobs": true
+          },
+
+          "circle-walk": {
+            "enabled": true,
+            "radius": 3
+          }
+        },
+
+        "chat-messages": {
+          "enabled": true,
+          "repeat": true,
+          "repeat-delay": 60,
+          "messages": [
+            "I'm a regular player",
+            "My owner is urFate_",
+            "I want be alone"
+          ]
+        },
+
+        "chat-log": false,
+        "auto-reconnect": true,
+        "auto-reconnect-delay": 60000
+      }
+    }
