@@ -1,26 +1,25 @@
 const mineflayer = require('mineflayer');
 const express = require('express');
-const Movements = require('mineflayer-pathfinder').Movements;
-const pathfinder = require('mineflayer-pathfinder').pathfinder;
-const { GoalBlock, GoalXZ } = require('mineflayer-pathfinder').goals;
+const { pathfinder, Movements, goals } = require('mineflayer-pathfinder');
+const { GoalBlock, GoalXZ } = goals;
 
 const config = require('./settings.json');
-
 const loggers = require('./logging.js');
 const logger = loggers.logger;
+
 const app = express();
 
-
 app.get('/', (req, res) => {
-  const currentUrl = `${req.protocol}://${req.get('host')}${req.originalUrl}`;
-  res.send('Your Bot Is Ready! Subscribe My Youtube: <a href="https://youtube.com/@H2N_OFFICIAL?si=UOLwjqUv-C1mWkn4">H2N OFFICIAL</a><br>Link Web For Uptime: <a href="' + currentUrl + '">' + currentUrl + '</a>');
-}); 
+   const currentUrl = `${req.protocol}://${req.get('host')}${req.originalUrl}`;
+   res.send('Bot is running ✔');
+});
 
 const PORT = process.env.PORT || 3000;
-
 app.listen(PORT, () => {
    logger.info(`Web server started on ${PORT}`);
 });
+
+let reconnecting = false;
 
 function createBot() {
    const bot = mineflayer.createBot({
@@ -34,191 +33,80 @@ function createBot() {
 
    bot.loadPlugin(pathfinder);
 
+   // ===== PATHFINDER =====
    bot.once('spawn', () => {
       const mcData = require('minecraft-data')(bot.version);
-      const Movements = require('mineflayer-pathfinder').Movements;
-
       const defaultMove = new Movements(bot, mcData);
 
-      if (bot.pathfinder) {
-         bot.pathfinder.setMovements(defaultMove);
+      bot.pathfinder.setMovements(defaultMove);
+
+      logger.info("Bot joined + Pathfinder ready");
+
+      // ===== AUTO-RECONNECT TIMER RESET =====
+      reconnecting = false;
+
+      // ===== ANTI AFK (SAFE VERSION) =====
+      if (config.utils['anti-afk']?.enabled) {
+         setInterval(() => {
+            if (!bot.entity) return;
+
+            bot.look(bot.entity.yaw + 0.3, bot.entity.pitch, true);
+
+            bot.setControlState('jump', true);
+            setTimeout(() => bot.setControlState('jump', false), 500);
+
+         }, 20000);
       }
 
-      logger.info("Pathfinder ready");
-   });
-
-   bot.once('spawn', () => {
-      logger.info("Bot joined to the server");
-
-      if (config.utils['auto-auth'].enabled) {
-         logger.info('Started auto-auth module');
-
-         let password = config.utils['auto-auth'].password;
+      // ===== AUTO AUTH =====
+      if (config.utils['auto-auth']?.enabled) {
          setTimeout(() => {
-            bot.chat(`/register ${password} ${password}`);
-            bot.chat(`/login ${password}`);
-         }, 500);
-
-         logger.info(`Authentication commands executed`);
+            const pass = config.utils['auto-auth'].password;
+            bot.chat(`/register ${pass} ${pass}`);
+            bot.chat(`/login ${pass}`);
+         }, 1000);
       }
 
-      if (config.utils['chat-messages'].enabled) {
-         logger.info('Started chat-messages module');
-
-         let messages = config.utils['chat-messages']['messages'];
+      // ===== CHAT =====
+      if (config.utils['chat-messages']?.enabled) {
+         const messages = config.utils['chat-messages'].messages;
+         let i = 0;
 
          if (config.utils['chat-messages'].repeat) {
-            let delay = config.utils['chat-messages']['repeat-delay'];
-            let i = 0;
-
             setInterval(() => {
-               bot.chat(`${messages[i]}`);
-
-               if (i + 1 === messages.length) {
-                  i = 0;
-               } else i++;
-            }, delay * 1000);
-         } else {
-            messages.forEach((msg) => {
-               bot.chat(msg);
-            });
+               bot.chat(messages[i]);
+               i = (i + 1) % messages.length;
+            }, config.utils['chat-messages'].repeat-delay * 1000);
          }
       }
 
-      const pos = config.position;
-
-      if (config.position.enabled) {
-         logger.info(
-             `Starting moving to target location (${pos.x}, ${pos.y}, ${pos.z})`
-         );
+      // ===== MOVE =====
+      if (config.position?.enabled) {
+         const pos = config.position;
          bot.pathfinder.setGoal(new GoalBlock(pos.x, pos.y, pos.z));
       }
-
-      if (config.utils['anti-afk'].enabled) {
-         if (config.utils['anti-afk'].sneak) {
-            bot.setControlState('sneak', true);
-         }
-
-         if (config.utils['anti-afk'].jump) {
-            bot.setControlState('jump', true);
-         }
-
-         if (config.utils['anti-afk']['hit'].enabled) {
-            let delay = config.utils['anti-afk']['hit']['delay'];
-            let attackMobs = config.utils['anti-afk']['hit']['attack-mobs']
-
-            setInterval(() => {
-               if(attackMobs) {
-                     let entity = bot.nearestEntity(e => e.type !== 'object' && e.type !== 'player'
-                         && e.type !== 'global' && e.type !== 'orb' && e.type !== 'other');
-
-                     if(entity) {
-                        bot.attack(entity);
-                        return
-                     }
-               }
-
-               bot.swingArm("right", true);
-            }, delay);
-         }
-
-         if (config.utils['anti-afk'].rotate) {
-            setInterval(() => {
-               bot.look(bot.entity.yaw + 1, bot.entity.pitch, true);
-            }, 100);
-         }
-
-         if (config.utils['anti-afk']['circle-walk'].enabled) {
-            let radius = config.utils['anti-afk']['circle-walk']['radius']
-            circleWalk(bot, radius);
-         }
-      }
    });
 
-   bot.on('chat', (username, message) => {
-      if (config.utils['chat-log']) {
-         logger.info(`<${username}> ${message}`);
-      }
+   // ===== RECONNECT 24/7 =====
+   bot.on('end', () => {
+      logger.warn("Bot disconnected");
+
+      if (reconnecting) return;
+      reconnecting = true;
+
+      setTimeout(() => {
+         logger.info("Reconnecting...");
+         createBot();
+      }, 30000);
    });
-
-   bot.on('goal_reached', () => {
-      if(config.position.enabled) {
-         logger.info(
-             `Bot arrived to target location. ${bot.entity.position}`
-         );
-      }
-   });
-
-   bot.on('death', () => {
-      logger.warn(
-         `Bot has been died and was respawned at ${bot.entity.position}`
-      );
-   });
-
-   if (config.utils['auto-reconnect']) {
-      let reconnecting = false;
-
-bot.on('end', () => {
-   console.log("Bot disconnected");
-
-   if (reconnecting) return;
-   reconnecting = true;
-
-   setTimeout(() => {
-      console.log("Reconnecting...");
-      createBot();
-   }, 20000);
-});
-   }
 
    bot.on('kicked', (reason) => {
-      try {
-         let reasonText = '';
-
-         const parsed = typeof reason === 'string'
-            ? JSON.parse(reason)
-            : reason;
-
-         reasonText =
-            parsed?.text ||
-            parsed?.extra?.[0]?.text ||
-            JSON.stringify(parsed);
-
-         reasonText = reasonText.replace(/§./g, '');
-
-         logger.warn(`Bot was kicked from the server. Reason: ${reasonText}`);
-      } catch (err) {
-         logger.warn(`Bot was kicked from the server.`);
-      }
+      logger.warn("Kicked:", reason);
    });
 
-   bot.on('error', (err) =>
-      logger.error(`${err.message}`)
-   );
-}
-
-function circleWalk(bot, radius) {
-   // Make bot walk in square with center in bot's  wthout stopping
-    return new Promise(() => {
-        const pos = bot.entity.position;
-        const x = pos.x;
-        const y = pos.y;
-        const z = pos.z;
-
-        const points = [
-            [x + radius, y, z],
-            [x, y, z + radius],
-            [x - radius, y, z],
-            [x, y, z - radius],
-        ];
-
-        let i = 0;
-        setInterval(() => {
-             if(i === points.length) i = 0;
-             bot.pathfinder.setGoal(new GoalXZ(points[i][0], points[i][2]));
-             i++;
-        }, 1000);
-    });
+   bot.on('error', (err) => {
+      logger.error(err.message);
+   });
 }
 
 createBot();
