@@ -156,11 +156,19 @@ function createBot() {
    });
 
    if (config.utils['auto-reconnect']) {
-      bot.on('end', () => {
-         setTimeout(() => {
-            createBot();
-         }, config.utils['auto-reconnect-delay']);
-      });
+      let reconnecting = false;
+
+bot.on('end', () => {
+   console.log("Bot disconnected");
+
+   if (reconnecting) return;
+   reconnecting = true;
+
+   setTimeout(() => {
+      console.log("Reconnecting...");
+      createBot();
+   }, 20000);
+});
    }
 
    bot.on('kicked', (reason) => {
