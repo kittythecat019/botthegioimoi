@@ -6,7 +6,7 @@
       },
 
       "server": {
-        "ip": "the_gioi_moi.aternos.me",
+        "ip": "choichung_vn.aternos.me",
         "port": 19013,
         "version": "1.26.1.1"
       },
@@ -47,8 +47,9 @@
           "repeat": true,
           "repeat-delay": 60,
           "messages": [
-            "chào mừng đến với sever!!",
-            "chủ sever là kittythecat"
+            "chào mừng đến với sever chơi chung vn!!",
+            "chủ sever là kittythecat",
+            "chào mọi người tôi là bot của sever"
           ]
         },
 
