@@ -4,7 +4,7 @@
   "description": "Afk bot for minecraft servers.",
   "main": "bot.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node bot.js"
   },
   "author": "urFate",
   "license": "MIT",
@@ -14,7 +14,5 @@
     "minecraft-data": "^3.110.2",
     "mineflayer": "^4.37.1",
     "mineflayer-pathfinder": "^2.4.5"
-  },
-  "devDependencies": {},
-  "keywords": []
+  }
 }
