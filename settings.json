@@ -47,9 +47,8 @@
           "repeat": true,
           "repeat-delay": 60,
           "messages": [
-            "chào mừng đến với sever chơi chung vn!!",
-            "chủ sever là kittythecat",
-            "chào mọi người tôi là bot của sever"
+            "chào mừng đến với sever!!",
+            "chủ sever là kittythecat"
           ]
         },
 
