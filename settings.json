@@ -33,7 +33,7 @@
           "hit": {
             "enabled": true,
             "delay": 5000,
-            "attack-mobs": true
+            "attack-mobs": false
           },
 
           "circle-walk": {
