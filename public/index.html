@@ -1,0 +1,580 @@
+
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Minecraft Bot Control</title>
+
+<style>
+:root {
+    color-scheme: dark;
+    font-family: Inter, Arial, sans-serif;
+    background: #0b1020;
+    color: #e5e7eb;
+}
+
+* { box-sizing: border-box; }
+
+body { margin: 0; padding: 20px; }
+main { max-width: 1100px; margin: auto; }
+h1 { margin-top: 0; }
+
+.panel {
+    background: #151c2f;
+    border: 1px solid #28334b;
+    border-radius: 14px;
+    padding: 18px;
+    margin-bottom: 16px;
+}
+
+.row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+}
+
+input, button {
+    font: inherit;
+    border-radius: 8px;
+    border: 1px solid #35425d;
+    padding: 10px 12px;
+}
+
+input {
+    background: #0b1020;
+    color: white;
+    min-width: 0;
+}
+
+button {
+    background: #263651;
+    color: white;
+    cursor: pointer;
+    user-select: none;
+    touch-action: manipulation;
+}
+
+button:hover { background: #354968; }
+button:active { background: #42618c; }
+button:disabled { opacity: .45; cursor: not-allowed; }
+
+.primary { background: #2563eb; border-color: #2563eb; }
+.danger { background: #991b1b; border-color: #991b1b; }
+.success { color: #86efac; }
+.error { color: #fca5a5; }
+.muted { color: #9ca3af; font-size: 13px; }
+
+.camera-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+#camera-wrapper {
+    position: relative;
+    width: 100%;
+    height: min(65vh, 560px);
+    min-height: 320px;
+    overflow: hidden;
+    background: #05070d;
+    border: 1px solid #35425d;
+    border-radius: 10px;
+}
+
+#camera {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border: 0;
+    pointer-events: none;
+    background: #05070d;
+}
+
+#camera-mouse-layer {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+    background: transparent;
+}
+
+#camera-mouse-layer.dragging { cursor: grabbing; }
+
+.controls {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(70px, 1fr));
+    gap: 8px;
+    max-width: 360px;
+    margin: 16px auto;
+}
+
+.controls button { min-height: 52px; font-size: 16px; }
+.empty { visibility: hidden; }
+
+#chat-log {
+    background: #0b1020;
+    padding: 12px;
+    height: 150px;
+    overflow-y: auto;
+    border-radius: 8px;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    margin-bottom: 10px;
+}
+
+#status { font-weight: bold; }
+
+@media (max-width: 600px) {
+    body { padding: 10px; }
+    .panel { padding: 12px; }
+    #camera-wrapper { min-height: 260px; height: 48vh; }
+}
+</style>
+</head>
+
+<body>
+<main>
+    <h1>Minecraft Bot Control</h1>
+
+    <section class="panel">
+        <h2>Kết nối</h2>
+
+        <div class="row">
+            <input
+                id="token"
+                type="password"
+                placeholder="Nhập CONTROL_TOKEN"
+                autocomplete="current-password"
+                style="flex:1">
+
+            <button class="primary" id="connect">Kết nối website</button>
+        </div>
+
+        <p id="status">Chưa kiểm tra kết nối.</p>
+        <p id="bot-info" class="muted">Chưa có thông tin bot.</p>
+        <p id="message" class="muted"></p>
+    </section>
+
+    <section class="panel">
+        <h2>Camera trực tiếp</h2>
+
+        <div class="camera-actions">
+            <button id="first-camera">Góc nhìn thứ nhất</button>
+            <button id="overview-camera">Góc nhìn quan sát</button>
+            <button id="reload-camera">Tải lại camera</button>
+        </div>
+
+        <div id="camera-wrapper">
+            <iframe
+                id="camera"
+                title="Minecraft live viewer"
+                allow="fullscreen"
+                referrerpolicy="no-referrer">
+            </iframe>
+
+            <div
+                id="camera-mouse-layer"
+                title="Giữ chuột trái và kéo để xoay camera">
+            </div>
+        </div>
+
+        <p class="muted">
+            Chọn góc nhìn thứ nhất, sau đó giữ chuột trái và kéo để xoay.
+            Khi kéo chuột, bot tạm dừng xoay chống AFK. Sau 10 giây không có
+            lệnh mới, bot quay lại chế độ tự động.
+        </p>
+    </section>
+
+    <section class="panel">
+        <h2>Điều khiển</h2>
+
+        <p>Chế độ hiện tại: <strong id="mode">Chưa xác định</strong></p>
+
+        <div class="controls">
+            <button class="empty" tabindex="-1" aria-hidden="true"> </button>
+            <button data-move="forward">W / ↑</button>
+            <button class="empty" tabindex="-1" aria-hidden="true"> </button>
+
+            <button data-move="left">A / ←</button>
+            <button data-move="back">S / ↓</button>
+            <button data-move="right">D / →</button>
+
+            <button data-move="sneak">Ngồi</button>
+            <button data-move="jump">Nhảy</button>
+            <button data-move="sprint">Chạy nhanh</button>
+        </div>
+
+        <div class="row">
+            <button class="danger" id="stop">Dừng</button>
+            <button class="primary" id="auto">Chuyển về tự động</button>
+        </div>
+
+        <p class="muted">
+            Khi bạn thực hiện lệnh điều khiển, bot chuyển sang thủ công.
+            Nếu không có lệnh mới trong 10 giây, bot trở về tự động.
+        </p>
+
+        <p id="position" class="muted">Vị trí: —</p>
+    </section>
+
+    <section class="panel">
+        <h2>Chat Minecraft</h2>
+
+        <div id="chat-log">Nhập tin nhắn để gửi vào game.</div>
+
+        <form id="chat-form" class="row">
+            <input
+                id="chat-input"
+                placeholder="Nhập tin nhắn..."
+                maxlength="256"
+                style="flex:1">
+
+            <button class="primary" type="submit">Gửi</button>
+        </form>
+    </section>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+
+let token = '';
+let connectedToWebsite = false;
+let pollTimer = null;
+
+const cameraUrl = () =>
+    `${location.protocol}//${location.hostname}:3007/`;
+
+function setMessage(text, isError = false) {
+    $('message').textContent = text;
+    $('message').className = isError ? 'error' : 'muted';
+}
+
+async function api(url, data) {
+    const response = await fetch(url, {
+        method: data ? 'POST' : 'GET',
+        headers: {
+            'Content-Type': 'application/json',
+            'x-control-token': token
+        },
+        body: data ? JSON.stringify(data) : undefined
+    });
+
+    let result;
+
+    try {
+        result = await response.json();
+    } catch {
+        throw new Error(`Máy chủ trả về HTTP ${response.status}`);
+    }
+
+    if (!response.ok || result.ok === false) {
+        throw new Error(result.error || `HTTP ${response.status}`);
+    }
+
+    return result;
+}
+
+async function connectWebsite() {
+    token = $('token').value.trim();
+
+    if (!token) {
+        setMessage('Bạn cần nhập CONTROL_TOKEN.', true);
+        return;
+    }
+
+    try {
+        const result = await api('/api/status');
+
+        connectedToWebsite = true;
+        setMessage('Đã kết nối website.');
+
+        $('status').textContent = result.connected
+            ? 'Bot đã vào Minecraft'
+            : 'Website kết nối được nhưng bot chưa vào Minecraft';
+
+        $('status').className = result.connected ? 'success' : 'muted';
+
+        if (pollTimer) clearInterval(pollTimer);
+        pollTimer = setInterval(updateStatus, 2000);
+
+        await updateStatus();
+        $('camera').src = cameraUrl();
+    } catch (err) {
+        connectedToWebsite = false;
+        setMessage(err.message, true);
+    }
+}
+
+async function updateStatus() {
+    if (!token) return;
+
+    try {
+        const data = await api('/api/status');
+
+        $('status').textContent = data.connected
+            ? 'Bot đang kết nối'
+            : 'Bot chưa kết nối';
+
+        $('status').className = data.connected ? 'success' : 'error';
+
+        $('bot-info').textContent = data.connected
+            ? `Tên: ${data.username} | Máu: ${data.health} | Đói: ${data.food}`
+            : 'Bot chưa có dữ liệu người chơi.';
+
+        $('mode').textContent = data.mode === 'manual'
+            ? 'Thủ công'
+            : 'Tự động';
+
+        $('position').textContent = data.position
+            ? `Vị trí: X ${data.position.x} | Y ${data.position.y} | Z ${data.position.z}`
+            : 'Vị trí: —';
+    } catch (err) {
+        $('status').textContent = 'Không lấy được trạng thái';
+        $('status').className = 'error';
+        setMessage(err.message, true);
+    }
+}
+
+async function sendControl(data) {
+    if (!connectedToWebsite || !token) {
+        setMessage('Hãy kết nối website trước.', true);
+        return;
+    }
+
+    try {
+        await api('/api/control', data);
+        setMessage('Đã gửi lệnh.');
+        await updateStatus();
+    } catch (err) {
+        setMessage(err.message, true);
+    }
+}
+
+async function changeCamera(mode) {
+    if (!token) {
+        setMessage('Hãy kết nối website trước.', true);
+        return;
+    }
+
+    try {
+        await api('/api/camera/mode', { mode });
+        setMessage('Đã gửi yêu cầu đổi góc nhìn.');
+
+        setTimeout(() => {
+            $('camera').src = cameraUrl() + '?t=' + Date.now();
+        }, 1200);
+    } catch (err) {
+        setMessage(err.message, true);
+    }
+}
+
+$('connect').addEventListener('click', connectWebsite);
+
+$('first-camera').addEventListener('click', () => changeCamera('first'));
+$('overview-camera').addEventListener('click', () => changeCamera('overview'));
+
+$('reload-camera').addEventListener('click', () => {
+    $('camera').src = cameraUrl() + '?t=' + Date.now();
+});
+
+$('stop').addEventListener('click', () => {
+    sendControl({ action: 'stop' });
+});
+
+$('auto').addEventListener('click', () => {
+    sendControl({ action: 'auto' });
+});
+
+// Các nút di chuyển.
+document.querySelectorAll('[data-move]').forEach(button => {
+    const move = button.dataset.move;
+    let pressed = false;
+
+    const start = event => {
+        event.preventDefault();
+        if (pressed) return;
+        pressed = true;
+        sendControl({ action: 'move', value: move, state: true });
+    };
+
+    const end = event => {
+        if (event) event.preventDefault();
+        if (!pressed) return;
+        pressed = false;
+        sendControl({ action: 'move', value: move, state: false });
+    };
+
+    button.addEventListener('pointerdown', start);
+    button.addEventListener('pointerup', end);
+    button.addEventListener('pointercancel', end);
+    button.addEventListener('lostpointercapture', end);
+    button.addEventListener('contextmenu', event => event.preventDefault());
+});
+
+// Điều khiển bằng bàn phím.
+const keyMap = {
+    KeyW: 'forward',
+    ArrowUp: 'forward',
+    KeyS: 'back',
+    ArrowDown: 'back',
+    KeyA: 'left',
+    ArrowLeft: 'left',
+    KeyD: 'right',
+    ArrowRight: 'right',
+    Space: 'jump',
+    ShiftLeft: 'sneak',
+    ShiftRight: 'sneak'
+};
+
+const keysDown = new Set();
+
+document.addEventListener('keydown', event => {
+    if (
+        event.target instanceof HTMLInputElement ||
+        event.target instanceof HTMLTextAreaElement
+    ) return;
+
+    const move = keyMap[event.code];
+
+    if (!move || keysDown.has(event.code)) return;
+
+    keysDown.add(event.code);
+    event.preventDefault();
+
+    sendControl({ action: 'move', value: move, state: true });
+});
+
+document.addEventListener('keyup', event => {
+    const move = keyMap[event.code];
+
+    if (!move) return;
+
+    keysDown.delete(event.code);
+    event.preventDefault();
+
+    sendControl({ action: 'move', value: move, state: false });
+});
+
+window.addEventListener('blur', () => {
+    for (const code of keysDown) {
+        const move = keyMap[code];
+
+        if (move) {
+            sendControl({ action: 'move', value: move, state: false });
+        }
+    }
+
+    keysDown.clear();
+});
+
+// Xoay camera bằng chuột.
+(() => {
+    const layer = $('camera-mouse-layer');
+
+    let dragging = false;
+    let lastX = 0;
+    let lastY = 0;
+    let pendingX = 0;
+    let pendingY = 0;
+    let sendTimer = null;
+
+    async function flushMouseDelta() {
+        sendTimer = null;
+
+        if (!pendingX && !pendingY) return;
+
+        const dx = pendingX;
+        const dy = pendingY;
+
+        pendingX = 0;
+        pendingY = 0;
+
+        if (!token || !connectedToWebsite) return;
+
+        try {
+            await api('/api/camera/rotate', { dx, dy });
+        } catch (err) {
+            setMessage(err.message, true);
+        }
+    }
+
+    function queueMouseDelta(dx, dy) {
+        pendingX += dx;
+        pendingY += dy;
+
+        if (!sendTimer) {
+            sendTimer = setTimeout(flushMouseDelta, 30);
+        }
+    }
+
+    layer.addEventListener('pointerdown', event => {
+        if (event.button !== 0) return;
+
+        if (!connectedToWebsite) {
+            setMessage('Hãy kết nối website trước.', true);
+            return;
+        }
+
+        dragging = true;
+        lastX = event.clientX;
+        lastY = event.clientY;
+
+        layer.classList.add('dragging');
+
+        try {
+            layer.setPointerCapture(event.pointerId);
+        } catch {}
+
+        event.preventDefault();
+    });
+
+    layer.addEventListener('pointermove', event => {
+        if (!dragging) return;
+
+        const dx = event.clientX - lastX;
+        const dy = event.clientY - lastY;
+
+        lastX = event.clientX;
+        lastY = event.clientY;
+
+        queueMouseDelta(dx, dy);
+        event.preventDefault();
+    });
+
+    function stopDragging() {
+        dragging = false;
+        layer.classList.remove('dragging');
+    }
+
+    layer.addEventListener('pointerup', stopDragging);
+    layer.addEventListener('pointercancel', stopDragging);
+    window.addEventListener('blur', stopDragging);
+})();
+
+// Chat Minecraft.
+$('chat-form').addEventListener('submit', async event => {
+    event.preventDefault();
+
+    const input = $('chat-input');
+    const message = input.value.trim();
+
+    if (!message) return;
+
+    await sendControl({ action: 'chat', value: message });
+
+    const line = document.createElement('div');
+    line.textContent = `Bạn → ${message}`;
+
+    $('chat-log').appendChild(line);
+    $('chat-log').scrollTop = $('chat-log').scrollHeight;
+
+    input.value = '';
+});
+</script>
+</body>
+</html>
