@@ -1,9 +1,12 @@
+
 require('dotenv').config();
 
 const mineflayer = require('mineflayer');
 const express = require('express');
 const path = require('path');
 const crypto = require('crypto');
+const Vec3 = require('vec3').Vec3;
+const { RaycastIterator } = require('prismarine-world').iterators;
 
 const { Movements, pathfinder } = require('mineflayer-pathfinder');
 const { GoalBlock, GoalXZ } = require('mineflayer-pathfinder').goals;
@@ -17,16 +20,18 @@ const PORT = Number(process.env.PORT || 3000);
 const CAMERA_PORT = Number(process.env.CAMERA_PORT || 3007);
 const CONTROL_TOKEN = process.env.CONTROL_TOKEN;
 
+const HEARTBEAT_TIMEOUT = 7000;
+
 app.use(express.json({ limit: '32kb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 let currentBot = null;
 let botReady = false;
 let manualMode = false;
-let manualTimer = null;
 let currentCameraMode = 'first';
 let reconnectTimer = null;
 let stopping = false;
+let lastHeartbeatAt = 0;
 
 const activeControls = new Set();
 
@@ -48,35 +53,38 @@ function authenticate(req, res, next) {
     if (!CONTROL_TOKEN) {
         return res.status(503).json({
             ok: false,
-            error: 'Server chưa cấu hình CONTROL_TOKEN trong file .env'
+            error: 'Chưa cấu hình CONTROL_TOKEN trong file .env.'
         });
     }
 
-    const suppliedBuffer = Buffer.from(
-        req.get('x-control-token') || ''
-    );
-
-    const expectedBuffer = Buffer.from(CONTROL_TOKEN);
+    const supplied = Buffer.from(req.get('x-control-token') || '');
+    const expected = Buffer.from(CONTROL_TOKEN);
 
     if (
-        expectedBuffer.length !== suppliedBuffer.length ||
-        !crypto.timingSafeEqual(expectedBuffer, suppliedBuffer)
+        supplied.length !== expected.length ||
+        !crypto.timingSafeEqual(supplied, expected)
     ) {
         return res.status(401).json({
             ok: false,
-            error: 'Token không đúng'
+            error: 'CONTROL_TOKEN không đúng.'
         });
     }
 
     next();
 }
 
-function stopControls(bot) {
+
+function stopControls(bot = currentBot) {
     if (!bot) return;
 
     for (const control of [
-        'forward', 'back', 'left', 'right',
-        'jump', 'sneak', 'sprint'
+        'forward',
+        'back',
+        'left',
+        'right',
+        'jump',
+        'sneak',
+        'sprint'
     ]) {
         try {
             bot.setControlState(control, false);
@@ -86,35 +94,44 @@ function stopControls(bot) {
     activeControls.clear();
 }
 
-function beginManualControl() {
-    if (!isConnected()) return;
 
-    manualMode = true;
+function stopBreaking(bot = currentBot) {
+    if (!bot) return;
 
-    if (manualTimer) clearTimeout(manualTimer);
+    // Hủy hiệu lực của mọi lần phá khối đã bắt đầu trước đó.
+    bot._webBreakGeneration = (bot._webBreakGeneration || 0) + 1;
+    bot._webBreaking = false;
+
+    if (bot._webBreakTimer) {
+        clearInterval(bot._webBreakTimer);
+        clearTimeout(bot._webBreakTimer);
+        bot._webBreakTimer = null;
+    }
+
+    // Yêu cầu Mineflayer dừng đào ngay.
+    try {
+        bot.stopDigging();
+    } catch {}
+
+    bot._webDigBusy = false;
+}
+
+function resumeAutomaticMode() {
+    if (!isConnected()) {
+        manualMode = false;
+        stopControls(currentBot);
+        stopBreaking(currentBot);
+        log('Đã chuyển sang chế độ tự động; đang chờ bot kết nối.');
+        return;
+    }
+
+    manualMode = false;
+    stopControls(currentBot);
+    stopBreaking(currentBot);
 
     try {
         currentBot.pathfinder.setGoal(null);
     } catch {}
-
-    manualTimer = setTimeout(() => {
-        manualMode = false;
-        manualTimer = null;
-
-        stopControls(currentBot);
-
-        if (!isConnected()) return;
-
-        log('Hết 10 giây không điều khiển: chuyển về chế độ tự động.');
-        resumeAutomaticMode();
-    }, 10000);
-}
-
-function resumeAutomaticMode() {
-    if (!isConnected()) return;
-
-    manualMode = false;
-    stopControls(currentBot);
 
     const pos = config.position;
 
@@ -124,11 +141,50 @@ function resumeAutomaticMode() {
                 new GoalBlock(pos.x, pos.y, pos.z)
             );
         } catch (err) {
-            log(`Không khôi phục được mục tiêu: ${err.message}`);
+            log(`Không đặt lại được mục tiêu: ${err.message}`);
         }
     }
 
     log('Đã chuyển về chế độ tự động.');
+}
+
+function setManualMode(enabled) {
+    if (!enabled) {
+        resumeAutomaticMode();
+        return;
+    }
+
+    if (!isConnected()) {
+        throw new Error('Bot chưa vào thế giới Minecraft.');
+    }
+
+    manualMode = true;
+
+    try {
+        currentBot.pathfinder.setGoal(null);
+    } catch {}
+
+    log('Đã chuyển sang chế độ thủ công.');
+}
+
+function requireManual(req, res) {
+    if (!isConnected()) {
+        res.status(503).json({
+            ok: false,
+            error: 'Bot chưa kết nối vào Minecraft.'
+        });
+        return false;
+    }
+
+    if (!manualMode) {
+        res.status(409).json({
+            ok: false,
+            error: 'Hãy bật chế độ Thủ công trước.'
+        });
+        return false;
+    }
+
+    return true;
 }
 
 function setCameraMode(mode) {
@@ -140,7 +196,10 @@ function setCameraMode(mode) {
         throw new Error('Góc nhìn không hợp lệ.');
     }
 
-    if (mode === currentCameraMode && currentBot._webViewerStarted) {
+    if (
+        mode === currentCameraMode &&
+        currentBot._webViewerStarted
+    ) {
         return;
     }
 
@@ -153,7 +212,7 @@ function setCameraMode(mode) {
             bot.viewer.close();
         }
     } catch (err) {
-        log(`Đóng viewer cũ: ${err.message}`);
+        log(`Đóng camera cũ: ${err.message}`);
     }
 
     bot._webViewerStarted = false;
@@ -177,8 +236,8 @@ function startCamera(bot) {
         bot._webViewerStarted = true;
 
         log(
-            `Camera đang chạy tại cổng ${CAMERA_PORT}; ` +
-            `chế độ: ${currentCameraMode}; khoảng nhìn: 4 chunks.`
+            `Camera chạy tại cổng ${CAMERA_PORT}; ` +
+            `góc nhìn: ${currentCameraMode}.`
         );
     } catch (err) {
         bot._webViewerStarted = false;
@@ -187,7 +246,7 @@ function startCamera(bot) {
 }
 
 function startAntiAfk(bot) {
-    const antiAfk = config.utils['anti-afk'];
+    const antiAfk = config.utils && config.utils['anti-afk'];
 
     if (!antiAfk || !antiAfk.enabled) return;
 
@@ -200,14 +259,10 @@ function startAntiAfk(bot) {
     }
 
     if (antiAfk.hit && antiAfk.hit.enabled) {
-        const delay = Math.max(
-            250,
-            Number(antiAfk.hit.delay) || 1000
-        );
-
+        const delay = Math.max(250, Number(antiAfk.hit.delay) || 1000);
         const attackMobs = Boolean(antiAfk.hit['attack-mobs']);
 
-        const hitTimer = setInterval(() => {
+        const timer = setInterval(() => {
             if (bot !== currentBot || !isConnected() || manualMode) return;
 
             try {
@@ -230,13 +285,11 @@ function startAntiAfk(bot) {
             } catch {}
         }, delay);
 
-        bot._webAntiAfkTimers.push(hitTimer);
+        bot._webAntiAfkTimers.push(timer);
     }
 
-    // Xoay camera chống AFK hiện có.
-    // Khi manualMode=true, thao tác xoay tự động tạm dừng.
     if (antiAfk.rotate) {
-        const rotateTimer = setInterval(() => {
+        const timer = setInterval(() => {
             if (bot !== currentBot || !isConnected() || manualMode) return;
 
             try {
@@ -248,7 +301,7 @@ function startAntiAfk(bot) {
             } catch {}
         }, 100);
 
-        bot._webAntiAfkTimers.push(rotateTimer);
+        bot._webAntiAfkTimers.push(timer);
     }
 
     const circle = antiAfk['circle-walk'];
@@ -265,7 +318,7 @@ function startAntiAfk(bot) {
 
         let index = 0;
 
-        const walkTimer = setInterval(() => {
+        const timer = setInterval(() => {
             if (bot !== currentBot || !isConnected() || manualMode) return;
             if (!bot.entity) return;
 
@@ -284,19 +337,187 @@ function startAntiAfk(bot) {
             index = (index + 1) % points.length;
         }, 5000);
 
-        bot._webAntiAfkTimers.push(walkTimer);
+        bot._webAntiAfkTimers.push(timer);
     }
 }
 
 function clearBotTimers(bot) {
-    if (!bot || !bot._webAntiAfkTimers) return;
+    if (!bot) return;
 
-    for (const timer of bot._webAntiAfkTimers) {
+    for (const timer of bot._webAntiAfkTimers || []) {
         clearInterval(timer);
         clearTimeout(timer);
     }
 
     bot._webAntiAfkTimers = [];
+    stopBreaking(bot);
+}
+
+function inventoryData(bot) {
+    if (!bot || !bot.inventory) {
+        return { items: [], selectedSlot: 0 };
+    }
+
+    const items = [];
+
+    for (let slot = 0; slot < bot.inventory.slots.length; slot++) {
+        const item = bot.inventory.slots[slot];
+        if (!item) continue;
+
+        items.push({
+            slot,
+            name: item.name,
+            displayName: item.displayName || item.name,
+            count: item.count,
+            type: item.type
+        });
+    }
+
+    return {
+        items,
+        selectedSlot: Number(bot.quickBarSlot) || 0
+    };
+}
+
+async function breakTargetBlock(bot) {
+    if (
+        bot !== currentBot ||
+        !isConnected() ||
+        !manualMode ||
+        !bot._webBreaking ||
+        bot._webDigBusy
+    ) {
+        return;
+    }
+
+    const generation = bot._webBreakGeneration || 0;
+    const block = bot.blockAtCursor(5);
+
+    if (!block || block.name === 'air' || block.boundingBox === 'empty') {
+        return;
+    }
+
+    bot._webDigBusy = true;
+
+    try {
+        // Kiểm tra lại trước khi gửi lệnh đào.
+        if (
+            bot !== currentBot ||
+            !isConnected() ||
+            !manualMode ||
+            !bot._webBreaking ||
+            generation !== (bot._webBreakGeneration || 0)
+        ) {
+            return;
+        }
+
+        await bot.dig(block, 'ignore');
+    } catch (err) {
+        if (
+            bot === currentBot &&
+            manualMode &&
+            bot._webBreaking &&
+            generation === (bot._webBreakGeneration || 0)
+        ) {
+            log(`Không phá được khối: ${err.message}`);
+        }
+    } finally {
+        bot._webDigBusy = false;
+    }
+}
+
+async function placeTargetBlock(bot) {
+    if (!isConnected() || bot !== currentBot || !manualMode) {
+        throw new Error('Bot chưa ở chế độ thủ công.');
+    }
+
+    const item = bot.heldItem;
+    if (!item) {
+        throw new Error('Tay bot đang trống. Hãy chọn một khối trong túi đồ.');
+    }
+
+    const yaw = bot.entity.yaw;
+    const pitch = bot.entity.pitch;
+    const eyeHeight = bot.entity.eyeHeight ?? 1.62;
+    const eye = bot.entity.position.offset(0, eyeHeight, 0);
+
+    const direction = new Vec3(
+        -Math.sin(yaw) * Math.cos(pitch),
+        Math.sin(pitch),
+        -Math.cos(yaw) * Math.cos(pitch)
+    );
+
+    const hit = bot.world.raycast(eye, direction, 5);
+
+    if (!hit || !hit.position || hit.face == null) {
+        throw new Error('Không tìm thấy mặt khối đang ngắm. Hãy ngắm vào một khối đặc trong phạm vi 5 block.');
+    }
+
+    const block = bot.blockAt(hit.position);
+
+    if (!block || block.name === 'air' || block.boundingBox === 'empty') {
+        throw new Error('Khối đang ngắm không hợp lệ.');
+    }
+
+    let face;
+
+    if (typeof hit.face === 'number') {
+        const faces = [
+            new Vec3(0, -1, 0),
+            new Vec3(0, 1, 0),
+            new Vec3(0, 0, -1),
+            new Vec3(0, 0, 1),
+            new Vec3(-1, 0, 0),
+            new Vec3(1, 0, 0)
+        ];
+
+        if (hit.face < 0 || hit.face >= faces.length) {
+            throw new Error('Raycast trả về mặt khối không hợp lệ.');
+        }
+
+        face = faces[hit.face];
+    } else if (
+        typeof hit.face === 'object' &&
+        typeof hit.face.x === 'number' &&
+        typeof hit.face.y === 'number' &&
+        typeof hit.face.z === 'number'
+    ) {
+        face = new Vec3(hit.face.x, hit.face.y, hit.face.z);
+    } else {
+        throw new Error('Không đọc được mặt khối.');
+    }
+
+    const targetPos = block.position.plus(face);
+    const targetBlock = bot.blockAt(targetPos);
+
+    if (!targetBlock) {
+        throw new Error('Không đọc được vị trí dự định đặt khối.');
+    }
+
+    if (
+        targetBlock.name !== 'air' &&
+        targetBlock.boundingBox !== 'empty'
+    ) {
+        throw new Error(
+            `Vị trí (${targetPos.x}, ${targetPos.y}, ${targetPos.z}) đã bị chiếm.`
+        );
+    }
+
+    try {
+        await bot.placeBlock(block, face);
+
+        return {
+            placed: true,
+            item: item.name,
+            position: {
+                x: targetPos.x,
+                y: targetPos.y,
+                z: targetPos.z
+            }
+        };
+    } catch (err) {
+        throw new Error(`Đặt khối thất bại: ${err.message}`);
+    }
 }
 
 function createBot() {
@@ -312,37 +533,45 @@ function createBot() {
     currentBot = bot;
     botReady = false;
     bot._webAntiAfkTimers = [];
+    bot._webViewerStarted = false;
+    bot._webBreaking = false;
+    bot._webDigBusy = false;
+    bot._webBreakGeneration = 0;
+    bot._webBreakTimer = null;
 
     bot.loadPlugin(pathfinder);
 
     bot.once('spawn', () => {
         if (bot !== currentBot) return;
-        console.log('Minecraft server version:', bot.version);
+
         botReady = true;
+        console.log('Minecraft server version:', bot.version);
         log('Bot đã vào server Minecraft.');
 
         try {
             const mcData = require('minecraft-data')(bot.version);
-            const movements = new Movements(bot, mcData);
-            bot.pathfinder.setMovements(movements);
+            bot.pathfinder.setMovements(new Movements(bot, mcData));
         } catch (err) {
             log(`Pathfinder: ${err.message}`);
         }
 
-        const autoAuth = config.utils['auto-auth'];
+        const autoAuth = config.utils && config.utils['auto-auth'];
 
         if (autoAuth && autoAuth.enabled) {
-            const password = autoAuth.password;
-
             setTimeout(() => {
                 if (!isConnected()) return;
 
-                bot.chat(`/register ${password} ${password}`);
-                bot.chat(`/login ${password}`);
+                try {
+                    const password = autoAuth.password;
+                    bot.chat(`/register ${password} ${password}`);
+                    bot.chat(`/login ${password}`);
+                } catch (err) {
+                    log(`Lỗi đăng nhập tự động: ${err.message}`);
+                }
             }, 500);
         }
 
-        const chatMessages = config.utils['chat-messages'];
+        const chatMessages = config.utils && config.utils['chat-messages'];
 
         if (
             chatMessages &&
@@ -352,23 +581,24 @@ function createBot() {
         ) {
             if (chatMessages.repeat) {
                 let i = 0;
-
                 const delay = Math.max(
                     1,
                     Number(chatMessages['repeat-delay']) || 60
                 );
 
-                const chatTimer = setInterval(() => {
+                const timer = setInterval(() => {
                     if (!isConnected() || manualMode) return;
 
-                    bot.chat(chatMessages.messages[i]);
-                    i = (i + 1) % chatMessages.messages.length;
+                    try {
+                        bot.chat(chatMessages.messages[i]);
+                        i = (i + 1) % chatMessages.messages.length;
+                    } catch {}
                 }, delay * 1000);
 
-                bot._webAntiAfkTimers.push(chatTimer);
+                bot._webAntiAfkTimers.push(timer);
             } else {
                 for (const message of chatMessages.messages) {
-                    bot.chat(message);
+                    try { bot.chat(message); } catch {}
                 }
             }
         }
@@ -376,9 +606,11 @@ function createBot() {
         if (config.position && config.position.enabled) {
             const pos = config.position;
 
-            bot.pathfinder.setGoal(
-                new GoalBlock(pos.x, pos.y, pos.z)
-            );
+            try {
+                bot.pathfinder.setGoal(new GoalBlock(pos.x, pos.y, pos.z));
+            } catch (err) {
+                log(`Không đặt được vị trí tự động: ${err.message}`);
+            }
         }
 
         startCamera(bot);
@@ -386,13 +618,13 @@ function createBot() {
     });
 
     bot.on('chat', (username, message) => {
-        if (config.utils['chat-log']) {
+        if (config.utils && config.utils['chat-log']) {
             log(`<${username}> ${message}`);
         }
     });
 
     bot.on('goal_reached', () => {
-        if (config.position && config.position.enabled) {
+        if (config.position && config.position.enabled && bot.entity) {
             log(`Bot đã tới mục tiêu: ${bot.entity.position}`);
         }
     });
@@ -407,9 +639,6 @@ function createBot() {
         botReady = false;
         manualMode = false;
 
-        if (manualTimer) clearTimeout(manualTimer);
-        manualTimer = null;
-
         clearBotTimers(bot);
         stopControls(bot);
 
@@ -419,7 +648,7 @@ function createBot() {
 
         log('Bot đã ngắt kết nối.');
 
-        if (config.utils['auto-reconnect'] && !stopping) {
+        if (config.utils && config.utils['auto-reconnect'] && !stopping) {
             if (reconnectTimer) clearTimeout(reconnectTimer);
 
             reconnectTimer = setTimeout(() => {
@@ -434,10 +663,12 @@ function createBot() {
     return bot;
 }
 
+// Trang web chính.
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
+// Trạng thái bot.
 app.get('/api/status', authenticate, (req, res) => {
     const connected = isConnected();
 
@@ -458,29 +689,43 @@ app.get('/api/status', authenticate, (req, res) => {
     });
 });
 
+// Website gửi heartbeat định kỳ.
+// Nếu đóng trang/mất heartbeat khi đang thủ công, bot tự trở về tự động.
+app.post('/api/session/heartbeat', authenticate, (req, res) => {
+    lastHeartbeatAt = Date.now();
+    res.json({ ok: true });
+});
+
+setInterval(() => {
+    if (
+        manualMode &&
+        lastHeartbeatAt > 0 &&
+        Date.now() - lastHeartbeatAt > HEARTBEAT_TIMEOUT
+    ) {
+        log('Mất kết nối website điều khiển; tự chuyển về chế độ tự động.');
+        lastHeartbeatAt = 0;
+        resumeAutomaticMode();
+    }
+}, 1000);
+
+// Công tắc góc nhìn camera.
 app.post('/api/camera/mode', authenticate, (req, res) => {
     try {
-        const mode = req.body.mode;
-        setCameraMode(mode);
-        res.json({ ok: true, mode });
+        setCameraMode(req.body.mode);
+        res.json({ ok: true, mode: currentCameraMode });
     } catch (err) {
         res.status(400).json({ ok: false, error: err.message });
     }
 });
 
-// Điều khiển xoay bằng chuột, dùng cùng bot.look() với cơ chế chống AFK.
+// Xoay camera bằng chuột.
 app.post('/api/camera/rotate', authenticate, (req, res) => {
-    if (!isConnected()) {
-        return res.status(503).json({
-            ok: false,
-            error: 'Bot chưa kết nối vào Minecraft.'
-        });
-    }
+    if (!requireManual(req, res)) return;
 
     if (currentCameraMode !== 'first') {
         return res.status(409).json({
             ok: false,
-            error: 'Hãy chọn Góc nhìn thứ nhất để điều khiển bằng chuột.'
+            error: 'Hãy chọn góc nhìn thứ nhất để điều khiển chuột.'
         });
     }
 
@@ -494,81 +739,131 @@ app.post('/api/camera/rotate', authenticate, (req, res) => {
         });
     }
 
-    const mouseX = Math.max(-150, Math.min(150, dx));
-    const mouseY = Math.max(-150, Math.min(150, dy));
-    const sensitivity = 0.004;
-    const bot = currentBot;
-
-    beginManualControl();
-
-    const yaw = bot.entity.yaw - mouseX * sensitivity;
-    const pitch = Math.max(
-        -Math.PI / 2,
-        Math.min(
-            Math.PI / 2,
-            bot.entity.pitch - mouseY * sensitivity
-        )
-    );
+    const mouseX = Math.max(-500, Math.min(500, dx));
+    const mouseY = Math.max(-500, Math.min(500, dy));
+    const sensitivity = 0.0025;
 
     try {
-        bot.look(yaw, pitch, true);
+        currentBot.look(
+            currentBot.entity.yaw - mouseX * sensitivity,
+            Math.max(
+                -Math.PI / 2,
+                Math.min(
+                    Math.PI / 2,
+                    currentBot.entity.pitch - mouseY * sensitivity
+                )
+            ),
+            true
+        );
+
         res.json({ ok: true });
     } catch (err) {
         res.status(500).json({ ok: false, error: err.message });
     }
 });
 
+// Di chuyển, chat, chuyển chế độ.
 app.post('/api/control', authenticate, (req, res) => {
-    if (!isConnected()) {
-        return res.status(503).json({
-            ok: false,
-            error: 'Bot chưa kết nối vào Minecraft.'
-        });
-    }
-
     const { action, value, state } = req.body;
-    const bot = currentBot;
 
     try {
+        if (action === 'mode') {
+            if (value === 'auto') {
+                resumeAutomaticMode();
+                return res.json({ ok: true, mode: 'auto' });
+            }
+
+            if (value === 'manual') {
+                setManualMode(true);
+                return res.json({ ok: true, mode: 'manual' });
+            }
+
+            return res.status(400).json({
+                ok: false,
+                error: 'Chế độ không hợp lệ.'
+            });
+        }
+
         if (action === 'auto') {
-            if (manualTimer) clearTimeout(manualTimer);
-            manualTimer = null;
             resumeAutomaticMode();
             return res.json({ ok: true, mode: 'auto' });
         }
 
+        if (!isConnected()) {
+            return res.status(503).json({
+                ok: false,
+                error: 'Bot chưa kết nối vào Minecraft.'
+            });
+        }
+
         if (action === 'stop') {
-            beginManualControl();
-            stopControls(bot);
-            try { bot.pathfinder.setGoal(null); } catch {}
+            if (!requireManual(req, res)) return;
+
+            stopControls(currentBot);
+            stopBreaking(currentBot);
+
+            try { currentBot.pathfinder.setGoal(null); } catch {}
+
             return res.json({ ok: true });
         }
 
+        
         if (action === 'move') {
+            if (!requireManual(req, res)) return;
+
             const allowed = [
                 'forward', 'back', 'left', 'right',
                 'jump', 'sneak', 'sprint'
             ];
 
-            if (!allowed.includes(value)) {
+            if (
+                typeof value !== 'string' ||
+                !allowed.includes(value) ||
+                typeof state !== 'boolean'
+            ) {
                 return res.status(400).json({
                     ok: false,
                     error: 'Lệnh di chuyển không hợp lệ.'
                 });
             }
 
-            beginManualControl();
+            const bot = currentBot;
 
-            const enabled = Boolean(state);
-            bot.setControlState(value, enabled);
+            // Chỉ thay đổi đúng điều khiển được gửi đến.
+            // Nhảy không tự bật tiến; chạy nhanh không tự bật tiến.
+            try {
+                bot.setControlState(value, state);
 
-            if (enabled) activeControls.add(value);
-            else activeControls.delete(value);
+                if (state) {
+                    activeControls.add(value);
+                } else {
+                    activeControls.delete(value);
+                }
 
-            return res.json({ ok: true, mode: 'manual' });
+                return res.json({
+                    ok: true,
+                    mode: 'manual',
+                    control: value,
+                    state
+                });
+            } catch (err) {
+                return res.status(500).json({
+                    ok: false,
+                    error: err.message
+                });
+            }
+            console.log(
+    `[CONTROL] ${value} = ${state}`,
+    '| forward =', bot.getControlState('forward'),
+    '| jump =', bot.getControlState('jump'),
+    '| sprint =', bot.getControlState('sprint')
+);
         }
 
+
         if (action === 'look') {
+            if (!requireManual(req, res)) return;
+
             const yaw = Number(req.body.yaw);
             const pitch = Number(req.body.pitch);
 
@@ -579,9 +874,7 @@ app.post('/api/control', authenticate, (req, res) => {
                 });
             }
 
-            beginManualControl();
-
-            bot.look(
+            currentBot.look(
                 yaw,
                 Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitch)),
                 true
@@ -591,6 +884,8 @@ app.post('/api/control', authenticate, (req, res) => {
         }
 
         if (action === 'chat') {
+            if (!requireManual(req, res)) return;
+
             const message = String(value || '').trim();
 
             if (!message || message.length > 256) {
@@ -600,9 +895,7 @@ app.post('/api/control', authenticate, (req, res) => {
                 });
             }
 
-            beginManualControl();
-            bot.chat(message);
-
+            currentBot.chat(message);
             return res.json({ ok: true });
         }
 
@@ -620,6 +913,146 @@ app.post('/api/control', authenticate, (req, res) => {
     }
 });
 
+// Túi đồ.
+app.get('/api/inventory', authenticate, (req, res) => {
+    if (!isConnected()) {
+        return res.status(503).json({
+            ok: false,
+            error: 'Bot chưa kết nối.'
+        });
+    }
+
+    res.json({ ok: true, ...inventoryData(currentBot) });
+});
+
+// Chọn ô đồ nhanh từ 1 đến 9.
+app.post('/api/inventory/select', authenticate, (req, res) => {
+    if (!requireManual(req, res)) return;
+
+    const slot = Number(req.body.slot);
+
+    if (!Number.isInteger(slot) || slot < 0 || slot > 8) {
+        return res.status(400).json({
+            ok: false,
+            error: 'Ô đồ phải từ 1 đến 9.'
+        });
+    }
+
+    try {
+        currentBot.setQuickBarSlot(slot);
+        res.json({ ok: true, ...inventoryData(currentBot) });
+    } catch (err) {
+        res.status(500).json({ ok: false, error: err.message });
+    }
+});
+
+// Phá khối: bắt đầu khi giữ chuột trái, dừng khi nhả.
+app.post('/api/game/break', authenticate, (req, res) => {
+    if (!requireManual(req, res)) return;
+
+    const bot = currentBot;
+    const pressed = Boolean(req.body.state);
+
+    if (!pressed) {
+        stopBreaking(bot);
+        return res.json({ ok: true });
+    }
+
+    if (bot._webBreaking) {
+        return res.json({ ok: true });
+    }
+
+    bot._webBreaking = true;
+
+    breakTargetBlock(bot);
+
+    bot._webBreakTimer = setInterval(() => {
+        if (bot !== currentBot || !manualMode || !bot._webBreaking) {
+            stopBreaking(bot);
+            return;
+        }
+
+        breakTargetBlock(bot);
+    }, 350);
+
+    res.json({ ok: true });
+});
+
+
+app.post('/api/game/break-once', authenticate, async (req, res) => {
+    if (!requireManual(req, res)) return;
+
+    const bot = currentBot;
+
+    try {
+        const block = bot.blockAtCursor(5);
+
+        if (!block || block.name === 'air' || block.boundingBox === 'empty') {
+            return res.status(400).json({
+                ok: false,
+                error: 'Không thấy khối để phá trong tầm ngắm.'
+            });
+        }
+
+        const generation = bot._webBreakGeneration || 0;
+
+if (!manualMode || bot !== currentBot) {
+    throw new Error('Bot đã chuyển khỏi chế độ thủ công.');
+}
+
+await bot.dig(block, 'ignore');
+
+if (
+    bot !== currentBot ||
+    !manualMode ||
+    generation !== (bot._webBreakGeneration || 0)
+) {
+    return res.status(409).json({
+        ok: false,
+        error: 'Đã hủy thao tác phá khối vì chế độ điều khiển thay đổi.'
+    });
+}
+
+        res.json({ ok: true, block: block.name });
+    } catch (err) {
+        log(`Lỗi phá khối: ${err.message}`);
+        res.status(400).json({
+            ok: false,
+            error: err.message
+        });
+    }
+});
+
+// Đặt khối bằng chuột phải.
+
+app.post('/api/game/place', authenticate, async (req, res) => {
+    if (!requireManual(req, res)) return;
+
+    try {
+        const result = await placeTargetBlock(currentBot);
+        res.json({ ok: true, ...result });
+    } catch (err) {
+        log(`Lỗi đặt khối: ${err.message}`);
+        res.status(400).json({
+            ok: false,
+            error: err.message
+        });
+    }
+});
+
+
+// Đánh/sử dụng vật phẩm bằng nút tương tác.
+app.post('/api/game/use', authenticate, async (req, res) => {
+    if (!requireManual(req, res)) return;
+
+    try {
+        await currentBot.activateItem();
+        res.json({ ok: true });
+    } catch (err) {
+        res.status(400).json({ ok: false, error: err.message });
+    }
+});
+
 const server = app.listen(PORT, () => {
     log(`Website đang chạy tại cổng ${PORT}`);
 
@@ -632,7 +1065,6 @@ function shutdown() {
     stopping = true;
 
     if (reconnectTimer) clearTimeout(reconnectTimer);
-    if (manualTimer) clearTimeout(manualTimer);
 
     if (currentBot) {
         clearBotTimers(currentBot);
@@ -644,9 +1076,7 @@ function shutdown() {
             }
         } catch {}
 
-        try {
-            currentBot.quit('Server shutting down');
-        } catch {}
+        try { currentBot.quit('Server shutting down'); } catch {}
     }
 
     server.close(() => process.exit(0));
@@ -655,5 +1085,13 @@ function shutdown() {
 
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
+
+process.on('uncaughtException', err => {
+    log(`Lỗi không xử lý: ${err.stack || err.message}`);
+});
+
+process.on('unhandledRejection', err => {
+    log(`Promise bị lỗi: ${err && err.stack ? err.stack : err}`);
+});
 
 createBot();
