@@ -1095,43 +1095,31 @@ process.on('unhandledRejection', err => {
 });
 
 
-const dns = require('node:dns');
 const net = require('node:net');
 
-async function testAternosNetwork() {
-    const host = 'the_gioi_moi.aternos.me';
-    const port = 19013;
+function testTcp(host, port) {
+    const socket = net.createConnection({ host, port });
+    socket.setTimeout(10000);
 
-    try {
-        const addresses = await dns.promises.lookup(host, {
-            all: true
-        });
+    socket.once('connect', () => {
+        log(`[TCP TEST] OK ${host}:${port}`);
+        socket.destroy();
+    });
 
-        log(`[NET TEST] DNS: ${JSON.stringify(addresses)}`);
+    socket.once('timeout', () => {
+        log(`[TCP TEST] TIMEOUT ${host}:${port}`);
+        socket.destroy();
+    });
 
-        const socket = net.createConnection({ host, port });
-
-        socket.setTimeout(10000);
-
-        socket.once('connect', () => {
-            log(`[NET TEST] TCP OK: ${host}:${port}`);
-            socket.destroy();
-        });
-
-        socket.once('timeout', () => {
-            log(`[NET TEST] TCP TIMEOUT: ${host}:${port}`);
-            socket.destroy();
-        });
-
-        socket.once('error', err => {
-            log(`[NET TEST] TCP ERROR: ${err.code} - ${err.message}`);
-        });
-    } catch (err) {
-        log(`[NET TEST] DNS ERROR: ${err.message}`);
-    }
+    socket.once('error', err => {
+        log(`[TCP TEST] ${err.code} ${host}:${port}`);
+    });
 }
 
-testAternosNetwork();
+testTcp('the_gioi_moi.aternos.me', 19013);
+
+// Bỏ dấu // và thay bằng DynIP thật nếu Aternos cung cấp:
+// testTcp('DYNIP_HOST', 19013);
 
 
 createBot();
