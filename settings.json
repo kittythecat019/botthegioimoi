@@ -6,7 +6,7 @@
       },
 
       "server": {
-        "ip": "the_gioi_moi.aternos.me",
+        "ip": "moose.aternos.host",
         "port": 19013,
         "version": "1.21.4"
       },
