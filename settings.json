@@ -8,14 +8,14 @@
       "server": {
         "ip": "the_gioi_moi.aternos.me",
         "port": 19013,
-        "version": "1.21.11"
+        "version": "1.21.4"
       },
 
       "position": {
         "enabled": true,
-        "x": 0,
-        "y": 0,
-        "z": 0
+        "x": 1,
+        "y": 63,
+        "z": 3
       },
 
       "utils": {
@@ -31,14 +31,14 @@
           "rotate": true,
 
           "hit": {
-            "enabled": true,
+            "enabled": false,
             "delay": 5000,
             "attack-mobs": false
           },
 
           "circle-walk": {
             "enabled": true,
-            "radius": 3
+            "radius": 2
           }
         },
 
