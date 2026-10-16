@@ -13,18 +13,25 @@
     background: #0b1020;
     color: #e5e7eb;
 }
-
 * { box-sizing: border-box; }
 
-body { margin: 0; padding: 20px; }
-main { max-width: 1100px; margin: auto; }
-h1 { margin-top: 0; }
+body {
+    margin: 0;
+    padding: 18px;
+}
+
+main {
+    max-width: 1400px;
+    margin: auto;
+}
+
+h1, h2 { margin-top: 0; }
 
 .panel {
     background: #151c2f;
     border: 1px solid #28334b;
     border-radius: 14px;
-    padding: 18px;
+    padding: 17px;
     margin-bottom: 16px;
 }
 
@@ -32,89 +39,270 @@ h1 { margin-top: 0; }
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 10px;
+    gap: 9px;
 }
 
 input, button {
     font: inherit;
-    border-radius: 8px;
     border: 1px solid #35425d;
+    border-radius: 8px;
     padding: 10px 12px;
 }
 
 input {
-    background: #0b1020;
-    color: white;
     min-width: 0;
+    color: white;
+    background: #0b1020;
 }
 
 button {
-    background: #263651;
     color: white;
+    background: #263651;
     cursor: pointer;
     user-select: none;
+    -webkit-user-select: none;
     touch-action: manipulation;
 }
 
 button:hover { background: #354968; }
-button:active { background: #42618c; }
 button:disabled { opacity: .45; cursor: not-allowed; }
-
+button.active { background: #166534; border-color: #22c55e; }
 .primary { background: #2563eb; border-color: #2563eb; }
-.danger { background: #991b1b; border-color: #991b1b; }
+.danger { background: #991b1b; border-color: #dc2626; }
 .success { color: #86efac; }
 .error { color: #fca5a5; }
 .muted { color: #9ca3af; font-size: 13px; }
+#status { font-weight: bold; }
+#message { overflow-wrap: anywhere; }
 
+/* Nút chuyển góc nhìn */
 .camera-actions {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
-    margin-bottom: 12px;
+    gap: 6px;
+    margin-bottom: 8px;
+}
+
+/* Camera và bảng điều khiển cạnh nhau */
+.camera-control-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 270px;
+    gap: 10px;
+    align-items: start;
+}
+
+.camera-main { min-width: 0; }
+
+.camera-side-controls {
+    min-width: 0;
+    padding: 10px;
+    background: #0f172a;
+    border: 1px solid #28334b;
+    border-radius: 10px;
+}
+
+.camera-side-controls h3 {
+    margin: 0 0 10px;
+    font-size: 16px;
 }
 
 #camera-wrapper {
     position: relative;
     width: 100%;
-    height: min(65vh, 560px);
-    min-height: 320px;
+    height: min(65vh, 620px);
+    min-height: 300px;
     overflow: hidden;
-    background: #05070d;
     border: 1px solid #35425d;
     border-radius: 10px;
+    background: #05070d;
 }
 
 #camera {
-    display: block;
     width: 100%;
     height: 100%;
+    display: block;
     border: 0;
     pointer-events: none;
-    background: #05070d;
 }
 
 #camera-mouse-layer {
     position: absolute;
     inset: 0;
     z-index: 2;
-    cursor: grab;
+    background: transparent;
     touch-action: none;
     user-select: none;
-    background: transparent;
+    -webkit-user-select: none;
+    cursor: grab;
 }
 
-#camera-mouse-layer.dragging { cursor: grabbing; }
+#camera-mouse-layer.locked { cursor: none; }
 
+#camera-mouse-layer:not(.locked):hover {
+    background: rgb(255 255 255 / 2%);
+}
+
+#camera-mouse-layer:active { cursor: grabbing; }
+
+.crosshair {
+    position: absolute;
+    pointer-events: none;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 15px;
+    height: 15px;
+    opacity: .75;
+}
+
+.crosshair::before,
+.crosshair::after {
+    content: "";
+    position: absolute;
+    background: white;
+    box-shadow: 0 0 2px black;
+}
+
+.crosshair::before {
+    width: 2px;
+    height: 15px;
+    left: 6px;
+}
+
+.crosshair::after {
+    height: 2px;
+    width: 15px;
+    top: 6px;
+}
+
+#lock-hint {
+    position: absolute;
+    z-index: 3;
+    top: 10px;
+    left: 10px;
+    background: rgb(0 0 0 / 65%);
+    padding: 8px 10px;
+    border-radius: 6px;
+    pointer-events: none;
+    font-size: 12px;
+}
+
+/* Bàn phím di chuyển */
 .controls {
     display: grid;
-    grid-template-columns: repeat(3, minmax(70px, 1fr));
-    gap: 8px;
-    max-width: 360px;
-    margin: 16px auto;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 5px;
+    max-width: 380px;
+    margin: 0 auto 10px;
 }
 
-.controls button { min-height: 52px; font-size: 16px; }
-.empty { visibility: hidden; }
+.controls button {
+    min-width: 0;
+    min-height: 45px;
+    padding: 7px 3px;
+    font-size: 12px;
+
+    /* Cho phép giữ nút trên màn hình cảm ứng */
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.controls button:active {
+    background: #166534;
+    border-color: #22c55e;
+}
+
+.empty {
+    visibility: hidden;
+    pointer-events: none;
+}
+
+.camera-side-controls #stop {
+    width: 100%;
+    min-height: 42px;
+}
+
+#sprint-toggle {
+    width: 100%;
+    min-height: 42px;
+    margin-bottom: 8px;
+}
+
+#sprint-toggle.active {
+    background: #166534;
+    border-color: #22c55e;
+}
+
+/* Nút đặt và phá khối */
+.action-buttons {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+    margin-top: 8px;
+}
+
+.action-buttons button {
+    min-width: 0;
+    min-height: 48px;
+    padding: 7px 4px;
+    font-size: 12px;
+    font-weight: bold;
+    overflow-wrap: anywhere;
+}
+
+#hotbar {
+    display: grid;
+    grid-template-columns: repeat(9, minmax(0, 1fr));
+    gap: 5px;
+    margin: 12px 0;
+}
+
+.hotbar-slot {
+    min-width: 0;
+    min-height: 65px;
+    padding: 5px 2px;
+    overflow-wrap: anywhere;
+    font-size: 11px;
+    text-align: center;
+    border-color: #475569;
+    background: #0b1020;
+}
+
+.hotbar-slot.selected {
+    outline: 3px solid #facc15;
+    background: #374151;
+}
+
+.slot-number {
+    display: block;
+    color: #facc15;
+    font-size: 11px;
+    margin-bottom: 4px;
+}
+
+.slot-count {
+    display: block;
+    color: #93c5fd;
+    margin-top: 4px;
+}
+
+#inventory-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(125px, 1fr));
+    gap: 7px;
+    margin-top: 12px;
+}
+
+.inventory-item {
+    border: 1px solid #35425d;
+    border-radius: 7px;
+    padding: 8px;
+    background: #0b1020;
+    font-size: 12px;
+    overflow-wrap: anywhere;
+}
 
 #chat-log {
     background: #0b1020;
@@ -127,12 +315,49 @@ button:disabled { opacity: .45; cursor: not-allowed; }
     margin-bottom: 10px;
 }
 
-#status { font-weight: bold; }
-
-@media (max-width: 600px) {
-    body { padding: 10px; }
+/* Màn hình nhỏ */
+@media (max-width: 800px) {
+    body { padding: 8px; }
     .panel { padding: 12px; }
-    #camera-wrapper { min-height: 260px; height: 48vh; }
+
+    .camera-control-layout {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .camera-side-controls { padding: 10px; }
+
+    .camera-side-controls .controls {
+        max-width: 380px;
+    }
+
+    .camera-side-controls .controls button {
+        min-height: 48px;
+        font-size: 14px;
+    }
+
+    .action-buttons button {
+        min-height: 50px;
+        font-size: 14px;
+    }
+
+    #camera-wrapper {
+        min-height: 250px;
+        height: 48vh;
+    }
+
+    #hotbar { gap: 3px; }
+    .hotbar-slot { min-height: 60px; font-size: 9px; }
+}
+
+@media (min-width: 801px) and (max-width: 1050px) {
+    .camera-control-layout {
+        grid-template-columns: minmax(0, 1fr) 235px;
+        gap: 8px;
+    }
+
+    .camera-side-controls { padding: 8px; }
+    .camera-side-controls .controls button { font-size: 11px; }
+    .action-buttons button { font-size: 11px; }
 }
 </style>
 </head>
@@ -143,18 +368,12 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 
     <section class="panel">
         <h2>Kết nối</h2>
-
         <div class="row">
-            <input
-                id="token"
-                type="password"
-                placeholder="Nhập CONTROL_TOKEN"
-                autocomplete="current-password"
-                style="flex:1">
-
+            <input id="token" type="password"
+                   placeholder="Nhập CONTROL_TOKEN"
+                   autocomplete="current-password" style="flex:1">
             <button class="primary" id="connect">Kết nối website</button>
         </div>
-
         <p id="status">Chưa kiểm tra kết nối.</p>
         <p id="bot-info" class="muted">Chưa có thông tin bot.</p>
         <p id="message" class="muted"></p>
@@ -167,73 +386,109 @@ button:disabled { opacity: .45; cursor: not-allowed; }
             <button id="first-camera">Góc nhìn thứ nhất</button>
             <button id="overview-camera">Góc nhìn quan sát</button>
             <button id="reload-camera">Tải lại camera</button>
+            <button class="primary" id="lock-mouse">Bật Mouse Lock</button>
         </div>
 
-        <div id="camera-wrapper">
-            <iframe
-                id="camera"
-                title="Minecraft live viewer"
-                allow="fullscreen"
-                referrerpolicy="no-referrer">
-            </iframe>
+        <div class="camera-control-layout">
+            <div class="camera-main">
+                <div id="camera-wrapper">
+                    <iframe id="camera" title="Minecraft live viewer"
+                            allow="fullscreen"
+                            referrerpolicy="no-referrer"></iframe>
 
-            <div
-                id="camera-mouse-layer"
-                title="Giữ chuột trái và kéo để xoay camera">
+                    <div id="camera-mouse-layer" tabindex="0"
+                         title="Mouse Lock để xoay camera">
+                        <div class="crosshair"></div>
+                    </div>
+
+                    <div id="lock-hint">
+                        Nhấn “Bật Mouse Lock” để xoay camera.
+                    </div>
+                </div>
+
+                <p class="muted">
+                    Khi tắt Mouse Lock, kéo chuột hoặc ngón tay trên camera để xoay.
+                    Khi bật Mouse Lock, di chuyển chuột để xoay.
+                    Dùng Q để đặt khối và E để phá khối.
+                </p>
             </div>
-        </div>
 
-        <p class="muted">
-            Chọn góc nhìn thứ nhất, sau đó giữ chuột trái và kéo để xoay.
-            Khi kéo chuột, bot tạm dừng xoay chống AFK. Sau 10 giây không có
-            lệnh mới, bot quay lại chế độ tự động.
-        </p>
+            <aside class="camera-side-controls">
+                <h3>Di chuyển</h3>
+
+                <div class="controls">
+                    <button class="empty" tabindex="-1" aria-hidden="true"> </button>
+                    <button data-move="forward">W / ↑</button>
+                    <button class="empty" tabindex="-1" aria-hidden="true"> </button>
+
+                    <button data-move="left">A / ←</button>
+                    <button data-move="back">S / ↓</button>
+                    <button data-move="right">D / →</button>
+
+                    <button data-move="sneak">Ngồi</button>
+                    <button data-move="jump">Nhảy</button>
+                    <button id="sprint-toggle" type="button">
+    Chạy nhanh: Tắt
+</button>
+                </div>
+
+                <button class="danger" id="stop">Dừng di chuyển</button>
+
+                <div class="action-buttons">
+                    <button class="primary" id="place-block">Đặt khối (Q)</button>
+                    <button class="danger" id="break-block">Phá khối (E)</button>
+                </div>
+
+                <p id="position" class="muted">Vị trí: —</p>
+                <p class="muted">
+                    W/A/S/D để di chuyển, Space để nhảy,
+                    Shift để ngồi, Ctrl để chạy nhanh.
+                    Phím 1–9 chọn ô đồ.
+                </p>
+            </aside>
+        </div>
     </section>
 
     <section class="panel">
-        <h2>Điều khiển</h2>
-
+        <h2>Chế độ điều khiển</h2>
         <p>Chế độ hiện tại: <strong id="mode">Chưa xác định</strong></p>
 
-        <div class="controls">
-            <button class="empty" tabindex="-1" aria-hidden="true"> </button>
-            <button data-move="forward">W / ↑</button>
-            <button class="empty" tabindex="-1" aria-hidden="true"> </button>
-
-            <button data-move="left">A / ←</button>
-            <button data-move="back">S / ↓</button>
-            <button data-move="right">D / →</button>
-
-            <button data-move="sneak">Ngồi</button>
-            <button data-move="jump">Nhảy</button>
-            <button data-move="sprint">Chạy nhanh</button>
-        </div>
-
         <div class="row">
-            <button class="danger" id="stop">Dừng</button>
-            <button class="primary" id="auto">Chuyển về tự động</button>
+            <button class="primary" id="manual">Bật thủ công</button>
+            <button id="auto">Bật tự động</button>
         </div>
 
         <p class="muted">
-            Khi bạn thực hiện lệnh điều khiển, bot chuyển sang thủ công.
-            Nếu không có lệnh mới trong 10 giây, bot trở về tự động.
+    W/A/S/D để di chuyển, nhấn W hai lần nhanh để bật/tắt chạy nhanh.
+    Space để nhảy, Shift để ngồi, Q đặt khối, E phá khối.
+    Phím 1–9 chọn ô đồ.
+</p>
+    </section>
+
+    <section class="panel">
+        <h2>Túi đồ</h2>
+        <p class="muted">
+            Chọn một ô trong thanh đồ để đổi vật phẩm đang cầm.
+            Các vật phẩm còn lại được liệt kê bên dưới.
         </p>
 
-        <p id="position" class="muted">Vị trí: —</p>
+        <div id="hotbar"></div>
+
+        <div class="row">
+            <button id="refresh-inventory">Làm mới túi đồ</button>
+            <button id="use-item">Sử dụng vật phẩm</button>
+        </div>
+
+        <div id="inventory-list"></div>
     </section>
 
     <section class="panel">
         <h2>Chat Minecraft</h2>
-
         <div id="chat-log">Nhập tin nhắn để gửi vào game.</div>
 
         <form id="chat-form" class="row">
-            <input
-                id="chat-input"
-                placeholder="Nhập tin nhắn..."
-                maxlength="256"
-                style="flex:1">
-
+            <input id="chat-input" placeholder="Nhập tin nhắn..."
+                   maxlength="256" style="flex:1">
             <button class="primary" type="submit">Gửi</button>
         </form>
     </section>
@@ -245,6 +500,11 @@ const $ = id => document.getElementById(id);
 let token = '';
 let connectedToWebsite = false;
 let pollTimer = null;
+let heartbeatTimer = null;
+let inventoryTimer = null;
+let currentMode = 'auto';
+let currentCameraMode = 'first';
+let inventoryBusy = false;
 
 const cameraUrl = () =>
     `${location.protocol}//${location.hostname}:3007/`;
@@ -254,14 +514,15 @@ function setMessage(text, isError = false) {
     $('message').className = isError ? 'error' : 'muted';
 }
 
-async function api(url, data) {
+async function api(url, data, options = {}) {
     const response = await fetch(url, {
-        method: data ? 'POST' : 'GET',
+        method: data !== undefined ? 'POST' : 'GET',
         headers: {
             'Content-Type': 'application/json',
             'x-control-token': token
         },
-        body: data ? JSON.stringify(data) : undefined
+        body: data !== undefined ? JSON.stringify(data) : undefined,
+        keepalive: Boolean(options.keepalive)
     });
 
     let result;
@@ -291,30 +552,47 @@ async function connectWebsite() {
         const result = await api('/api/status');
 
         connectedToWebsite = true;
+        currentMode = result.mode || 'auto';
+        currentCameraMode = result.cameraMode || 'first';
+
         setMessage('Đã kết nối website.');
-
-        $('status').textContent = result.connected
-            ? 'Bot đã vào Minecraft'
-            : 'Website kết nối được nhưng bot chưa vào Minecraft';
-
-        $('status').className = result.connected ? 'success' : 'muted';
+        $('camera').src = cameraUrl();
 
         if (pollTimer) clearInterval(pollTimer);
-        pollTimer = setInterval(updateStatus, 2000);
+        if (heartbeatTimer) clearInterval(heartbeatTimer);
+        if (inventoryTimer) clearInterval(inventoryTimer);
 
+        pollTimer = setInterval(updateStatus, 1500);
+        heartbeatTimer = setInterval(sendHeartbeat, 2000);
+        inventoryTimer = setInterval(refreshInventory, 2500);
+
+        await sendHeartbeat();
         await updateStatus();
-        $('camera').src = cameraUrl();
+        await refreshInventory();
     } catch (err) {
         connectedToWebsite = false;
         setMessage(err.message, true);
     }
 }
 
+async function sendHeartbeat() {
+    if (!token || !connectedToWebsite) return;
+
+    try {
+        await api('/api/session/heartbeat', {});
+    } catch {
+        // Máy chủ sẽ tự xử lý khi heartbeat hết hạn.
+    }
+}
+
 async function updateStatus() {
-    if (!token) return;
+    if (!token || !connectedToWebsite) return;
 
     try {
         const data = await api('/api/status');
+
+        currentMode = data.mode || currentMode;
+        currentCameraMode = data.cameraMode || currentCameraMode;
 
         $('status').textContent = data.connected
             ? 'Bot đang kết nối'
@@ -326,13 +604,21 @@ async function updateStatus() {
             ? `Tên: ${data.username} | Máu: ${data.health} | Đói: ${data.food}`
             : 'Bot chưa có dữ liệu người chơi.';
 
-        $('mode').textContent = data.mode === 'manual'
-            ? 'Thủ công'
-            : 'Tự động';
+        $('mode').textContent =
+            currentMode === 'manual' ? 'Thủ công' : 'Tự động';
+
+        $('manual').classList.toggle('active', currentMode === 'manual');
+        $('auto').classList.toggle('active', currentMode === 'auto');
 
         $('position').textContent = data.position
             ? `Vị trí: X ${data.position.x} | Y ${data.position.y} | Z ${data.position.z}`
             : 'Vị trí: —';
+
+        // Không giữ nút di chuyển khi máy chủ đã chuyển sang tự động.
+        if (currentMode !== 'manual') {
+            releaseAllMovement();
+            unlockMouse();
+        }
     } catch (err) {
         $('status').textContent = 'Không lấy được trạng thái';
         $('status').className = 'error';
@@ -348,22 +634,55 @@ async function sendControl(data) {
 
     try {
         await api('/api/control', data);
-        setMessage('Đã gửi lệnh.');
         await updateStatus();
     } catch (err) {
         setMessage(err.message, true);
     }
 }
 
+async function setMode(mode) {
+    if (!connectedToWebsite || !token) {
+        setMessage('Hãy kết nối website trước.', true);
+        return;
+    }
+
+    try {
+        // Nhả các phím trước khi chuyển chế độ.
+        if (mode === 'auto') {
+            releaseAllMovement();
+            unlockMouse();
+        }
+
+        await api('/api/control', { action: 'mode', value: mode });
+
+        currentMode = mode;
+
+        if (mode === 'auto') {
+            setMessage('Đã bật chế độ tự động.');
+        } else {
+            setMessage('Đã bật chế độ thủ công.');
+        }
+
+        await updateStatus();
+    } catch (err) {
+        setMessage(err.message, true);
+    }
+}
+
+$('connect').addEventListener('click', connectWebsite);
+$('manual').addEventListener('click', () => setMode('manual'));
+$('auto').addEventListener('click', () => setMode('auto'));
+
 async function changeCamera(mode) {
-    if (!token) {
+    if (!connectedToWebsite) {
         setMessage('Hãy kết nối website trước.', true);
         return;
     }
 
     try {
         await api('/api/camera/mode', { mode });
-        setMessage('Đã gửi yêu cầu đổi góc nhìn.');
+        currentCameraMode = mode;
+        setMessage('Đã yêu cầu đổi góc nhìn.');
 
         setTimeout(() => {
             $('camera').src = cameraUrl() + '?t=' + Date.now();
@@ -373,50 +692,25 @@ async function changeCamera(mode) {
     }
 }
 
-$('connect').addEventListener('click', connectWebsite);
-
 $('first-camera').addEventListener('click', () => changeCamera('first'));
-$('overview-camera').addEventListener('click', () => changeCamera('overview'));
+
+$('overview-camera').addEventListener('click', () => {
+    unlockMouse();
+    changeCamera('overview');
+});
 
 $('reload-camera').addEventListener('click', () => {
     $('camera').src = cameraUrl() + '?t=' + Date.now();
 });
 
-$('stop').addEventListener('click', () => {
-    sendControl({ action: 'stop' });
-});
+/* =====================================================
+   HỆ THỐNG DI CHUYỂN
+   Hỗ trợ bàn phím và nút nhấn giữ bằng chuột/cảm ứng.
+   Mỗi hướng chỉ gửi lệnh bật/tắt khi cần thiết.
+===================================================== */
 
-$('auto').addEventListener('click', () => {
-    sendControl({ action: 'auto' });
-});
 
-// Các nút di chuyển.
-document.querySelectorAll('[data-move]').forEach(button => {
-    const move = button.dataset.move;
-    let pressed = false;
 
-    const start = event => {
-        event.preventDefault();
-        if (pressed) return;
-        pressed = true;
-        sendControl({ action: 'move', value: move, state: true });
-    };
-
-    const end = event => {
-        if (event) event.preventDefault();
-        if (!pressed) return;
-        pressed = false;
-        sendControl({ action: 'move', value: move, state: false });
-    };
-
-    button.addEventListener('pointerdown', start);
-    button.addEventListener('pointerup', end);
-    button.addEventListener('pointercancel', end);
-    button.addEventListener('lostpointercapture', end);
-    button.addEventListener('contextmenu', event => event.preventDefault());
-});
-
-// Điều khiển bằng bàn phím.
 const keyMap = {
     KeyW: 'forward',
     ArrowUp: 'forward',
@@ -426,137 +720,635 @@ const keyMap = {
     ArrowLeft: 'left',
     KeyD: 'right',
     ArrowRight: 'right',
-    Space: 'jump',
     ShiftLeft: 'sneak',
     ShiftRight: 'sneak'
 };
 
+
 const keysDown = new Set();
+const movementSources = new Map();
+const pointerMoves = new Map();
+const keyboardMoves = new Map();
 
-document.addEventListener('keydown', event => {
-    if (
-        event.target instanceof HTMLInputElement ||
-        event.target instanceof HTMLTextAreaElement
-    ) return;
+let sprintToggled = false;
+let lastForwardTap = 0;
+const DOUBLE_TAP_DELAY = 300;
 
-    const move = keyMap[event.code];
 
-    if (!move || keysDown.has(event.code)) return;
+let movementRequestQueue = Promise.resolve();
 
-    keysDown.add(event.code);
-    event.preventDefault();
-
-    sendControl({ action: 'move', value: move, state: true });
-});
-
-document.addEventListener('keyup', event => {
-    const move = keyMap[event.code];
-
-    if (!move) return;
-
-    keysDown.delete(event.code);
-    event.preventDefault();
-
-    sendControl({ action: 'move', value: move, state: false });
-});
-
-window.addEventListener('blur', () => {
-    for (const code of keysDown) {
-        const move = keyMap[code];
-
-        if (move) {
-            sendControl({ action: 'move', value: move, state: false });
-        }
+function sendMove(move, state) {
+    if (!connectedToWebsite || !token || currentMode !== 'manual') {
+        return;
     }
 
-    keysDown.clear();
-});
+    const payload = {
+        action: 'move',
+        value: move,
+        state: Boolean(state)
+    };
 
-// Xoay camera bằng chuột.
-(() => {
-    const layer = $('camera-mouse-layer');
-
-    let dragging = false;
-    let lastX = 0;
-    let lastY = 0;
-    let pendingX = 0;
-    let pendingY = 0;
-    let sendTimer = null;
-
-    async function flushMouseDelta() {
-        sendTimer = null;
-
-        if (!pendingX && !pendingY) return;
-
-        const dx = pendingX;
-        const dy = pendingY;
-
-        pendingX = 0;
-        pendingY = 0;
-
-        if (!token || !connectedToWebsite) return;
-
-        try {
-            await api('/api/camera/rotate', { dx, dy });
-        } catch (err) {
+    // Giữ thứ tự các lệnh di chuyển khi gửi lên server.
+    movementRequestQueue = movementRequestQueue
+        .catch(() => {})
+        .then(() => api('/api/control', payload))
+        .catch(err => {
             setMessage(err.message, true);
-        }
+        });
+}
+
+
+function updateSprintButton() {
+    const button = $('sprint-toggle');
+
+    button.textContent = sprintToggled
+        ? 'Chạy nhanh: Bật'
+        : 'Chạy nhanh: Tắt';
+
+    button.classList.toggle('active', sprintToggled);
+}
+
+function toggleSprint() {
+    if (!connectedToWebsite) {
+        setMessage('Hãy kết nối website trước.', true);
+        return;
     }
 
-    function queueMouseDelta(dx, dy) {
-        pendingX += dx;
-        pendingY += dy;
-
-        if (!sendTimer) {
-            sendTimer = setTimeout(flushMouseDelta, 30);
-        }
+    if (currentMode !== 'manual') {
+        setMessage('Hãy bật chế độ thủ công trước.', true);
+        return;
     }
 
-    layer.addEventListener('pointerdown', event => {
-        if (event.button !== 0) return;
+    sprintToggled = !sprintToggled;
+    updateSprintButton();
 
-        if (!connectedToWebsite) {
-            setMessage('Hãy kết nối website trước.', true);
+    // Chạy nhanh là trạng thái bật/tắt độc lập với việc giữ W.
+    sendMove('sprint', sprintToggled);
+}
+
+$('sprint-toggle').addEventListener('click', toggleSprint);
+
+function setMovementSource(source, move, pressed) {
+    if (!connectedToWebsite || !token || currentMode !== 'manual') {
+        if (pressed) {
+            setMessage('Hãy kết nối và bật chế độ thủ công trước.', true);
+        }
+        return;
+    }
+
+    let sources = movementSources.get(move);
+
+    if (!sources) {
+        sources = new Set();
+        movementSources.set(move, sources);
+    }
+
+    const wasPressed = sources.size > 0;
+
+    if (pressed) {
+        if (sources.has(source)) return;
+        sources.add(source);
+    } else {
+        if (!sources.has(source)) return;
+        sources.delete(source);
+    }
+
+    const isPressed = sources.size > 0;
+
+    if (isPressed) {
+        movementSources.set(move, sources);
+    } else {
+        movementSources.delete(move);
+    }
+
+    if (wasPressed !== isPressed) {
+        sendMove(move, isPressed);
+    }
+}
+
+/* Nút di chuyển: nhấn giữ để di chuyển. */
+document.querySelectorAll('[data-move]').forEach(button => {
+    const move = button.dataset.move;
+
+    button.addEventListener('pointerdown', event => {
+        event.preventDefault();
+
+        if (!connectedToWebsite || currentMode !== 'manual') {
+            setMessage('Hãy kết nối và bật chế độ thủ công trước.', true);
             return;
         }
 
-        dragging = true;
-        lastX = event.clientX;
-        lastY = event.clientY;
+        if (pointerMoves.has(event.pointerId)) return;
 
-        layer.classList.add('dragging');
+        pointerMoves.set(event.pointerId, move);
+        button.classList.add('active');
 
         try {
-            layer.setPointerCapture(event.pointerId);
+            button.setPointerCapture(event.pointerId);
         } catch {}
 
-        event.preventDefault();
+        setMovementSource(`pointer:${event.pointerId}`, move, true);
     });
 
-    layer.addEventListener('pointermove', event => {
-        if (!dragging) return;
-
-        const dx = event.clientX - lastX;
-        const dy = event.clientY - lastY;
-
-        lastX = event.clientX;
-        lastY = event.clientY;
-
-        queueMouseDelta(dx, dy);
+    button.addEventListener('contextmenu', event => {
         event.preventDefault();
     });
+});
 
-    function stopDragging() {
-        dragging = false;
-        layer.classList.remove('dragging');
+function releasePointerMove(event) {
+    if (!pointerMoves.has(event.pointerId)) return;
+
+    const move = pointerMoves.get(event.pointerId);
+    pointerMoves.delete(event.pointerId);
+
+    setMovementSource(`pointer:${event.pointerId}`, move, false);
+
+    const stillHeld = [...pointerMoves.values()].includes(move);
+
+    if (!stillHeld) {
+        document.querySelectorAll('[data-move]').forEach(button => {
+            if (button.dataset.move === move) {
+                button.classList.remove('active');
+            }
+        });
+    }
+}
+
+document.addEventListener('pointerup', releasePointerMove);
+document.addEventListener('pointercancel', releasePointerMove);
+
+document.querySelectorAll('[data-move]').forEach(button => {
+    button.addEventListener('lostpointercapture', releasePointerMove);
+});
+
+/* Bàn phím */
+document.addEventListener('keydown', event => {
+    if (
+        event.target instanceof HTMLInputElement ||
+        event.target instanceof HTMLTextAreaElement ||
+        event.target.isContentEditable ||
+        event.repeat
+    ) return;
+
+    // Nhấn W hai lần trong 300 ms để bật/tắt chạy nhanh.
+    if (event.code === 'KeyW' || event.code === 'ArrowUp') {
+        const now = performance.now();
+
+        if (now - lastForwardTap <= DOUBLE_TAP_DELAY) {
+            toggleSprint();
+            lastForwardTap = 0;
+        } else {
+            lastForwardTap = now;
+        }
     }
 
-    layer.addEventListener('pointerup', stopDragging);
-    layer.addEventListener('pointercancel', stopDragging);
-    window.addEventListener('blur', stopDragging);
-})();
+    if (event.code === 'KeyQ') {
+        event.preventDefault();
+        placeBlock();
+        return;
+    }
 
-// Chat Minecraft.
+    if (event.code === 'KeyE') {
+        event.preventDefault();
+        breakBlock();
+        return;
+    }
+
+    // Phím 1–9 chọn ô thanh đồ.
+    if (/^[1-9]$/.test(event.key)) {
+        event.preventDefault();
+        selectHotbar(Number(event.key) - 1);
+        return;
+    }
+
+    
+if (event.code === 'Space') {
+    event.preventDefault();
+
+    if (keysDown.has('Space')) return;
+
+    keysDown.add('Space');
+    setMovementSource('key:Space', 'jump', true);
+    return;
+}
+
+const move = keyMap[event.code];
+
+if (!move || keysDown.has(event.code)) return;
+
+
+    event.preventDefault();
+    keysDown.add(event.code);
+    keyboardMoves.set(event.code, move);
+
+    setMovementSource(`key:${event.code}`, move, true);
+});
+
+document.addEventListener('keyup', event => {
+    
+if (event.code === 'Space') {
+    event.preventDefault();
+    keysDown.delete('Space');
+    setMovementSource('key:Space', 'jump', false);
+    return;
+}
+
+const move = keyboardMoves.get(event.code);
+if (!move) return;
+
+
+    event.preventDefault();
+
+    keysDown.delete(event.code);
+    keyboardMoves.delete(event.code);
+
+    setMovementSource(`key:${event.code}`, move, false);
+});
+
+function releaseAllMovement() {
+    for (const move of [
+    'forward', 'back', 'left', 'right',
+    'jump', 'sneak'
+]) {
+    sendMove(move, false);
+}
+
+movementSources.clear();
+
+    keyboardMoves.clear();
+    keysDown.clear();
+
+    for (const [pointerId, move] of pointerMoves.entries()) {
+        setMovementSource(`pointer:${pointerId}`, move, false);
+    }
+
+    pointerMoves.clear();
+
+    document.querySelectorAll('[data-move]').forEach(button => {
+        button.classList.remove('active');
+    });
+
+    // Dọn trạng thái chuyển động còn sót.
+    for (const [move, sources] of movementSources.entries()) {
+        if (sources.size > 0) {
+            sendMove(move, false);
+        }
+    }
+
+    movementSources.clear();
+
+    // Dừng chạy khi dừng toàn bộ chuyển động.
+    sprintToggled = false;
+    updateSprintButton();
+    sendMove('sprint', false);
+}
+
+$('stop').addEventListener('click', async () => {
+    releaseAllMovement();
+    await sendControl({ action: 'stop' });
+});
+
+window.addEventListener('blur', releaseAllMovement);
+
+updateSprintButton();
+
+
+/* =====================================================
+   CAMERA: MOUSE LOCK VÀ KÉO CHUỘT
+===================================================== */
+
+const layer = $('camera-mouse-layer');
+let mouseLocked = false;
+let mouseQueueX = 0;
+let mouseQueueY = 0;
+let mouseSendTimer = null;
+let mouseSending = false;
+
+$('lock-mouse').addEventListener('click', async () => {
+    if (!connectedToWebsite) {
+        setMessage('Hãy kết nối website trước.', true);
+        return;
+    }
+
+    if (currentMode !== 'manual') {
+        setMessage('Hãy bật chế độ thủ công trước.', true);
+        return;
+    }
+
+    if (currentCameraMode !== 'first') {
+        setMessage('Chọn góc nhìn thứ nhất trước khi khóa chuột.', true);
+        return;
+    }
+
+    try {
+        if (mouseLocked) {
+            unlockMouse();
+        } else {
+            await layer.requestPointerLock();
+        }
+    } catch (err) {
+        setMessage(`Không khóa được chuột: ${err.message}`, true);
+    }
+});
+
+document.addEventListener('pointerlockchange', () => {
+    mouseLocked = document.pointerLockElement === layer;
+    layer.classList.toggle('locked', mouseLocked);
+
+    $('lock-mouse').textContent =
+        mouseLocked ? 'Nhả Mouse Lock' : 'Bật Mouse Lock';
+
+    $('lock-hint').textContent = mouseLocked
+        ? 'Mouse Lock đang bật · Escape để nhả chuột'
+        : 'Kéo chuột hoặc ngón tay để xoay camera.';
+});
+
+document.addEventListener('pointerlockerror', () => {
+    setMessage('Trình duyệt không cho phép khóa chuột.', true);
+});
+
+function unlockMouse() {
+    if (document.pointerLockElement) {
+        document.exitPointerLock();
+    }
+}
+
+async function flushMouse() {
+    mouseSendTimer = null;
+
+    if (
+        mouseSending ||
+        (!mouseQueueX && !mouseQueueY) ||
+        !connectedToWebsite ||
+        currentMode !== 'manual'
+    ) return;
+
+    const dx = mouseQueueX;
+    const dy = mouseQueueY;
+
+    mouseQueueX = 0;
+    mouseQueueY = 0;
+    mouseSending = true;
+
+    try {
+        await api('/api/camera/rotate', { dx, dy });
+    } catch (err) {
+        setMessage(err.message, true);
+    } finally {
+        mouseSending = false;
+
+        if ((mouseQueueX || mouseQueueY) && !mouseSendTimer) {
+            mouseSendTimer = setTimeout(flushMouse, 35);
+        }
+    }
+}
+
+/* Kéo chuột hoặc ngón tay khi Mouse Lock tắt */
+let dragPointerId = null;
+let lastDragX = 0;
+let lastDragY = 0;
+
+layer.addEventListener('pointerdown', event => {
+    if (mouseLocked) return;
+    if (currentCameraMode !== 'first') return;
+
+    dragPointerId = event.pointerId;
+    lastDragX = event.clientX;
+    lastDragY = event.clientY;
+
+    try {
+        layer.setPointerCapture(event.pointerId);
+    } catch {}
+
+    event.preventDefault();
+});
+
+layer.addEventListener('pointermove', event => {
+    if (mouseLocked || event.pointerId !== dragPointerId) return;
+
+    const dx = event.clientX - lastDragX;
+    const dy = event.clientY - lastDragY;
+
+    lastDragX = event.clientX;
+    lastDragY = event.clientY;
+
+    if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return;
+
+    mouseQueueX += dx;
+    mouseQueueY += dy;
+
+    if (!mouseSendTimer && !mouseSending) {
+        mouseSendTimer = setTimeout(flushMouse, 35);
+    }
+
+    event.preventDefault();
+});
+
+function endCameraDrag(event) {
+    if (event.pointerId !== dragPointerId) return;
+    dragPointerId = null;
+}
+
+layer.addEventListener('pointerup', endCameraDrag);
+layer.addEventListener('pointercancel', endCameraDrag);
+
+layer.addEventListener('lostpointercapture', () => {
+    dragPointerId = null;
+});
+
+/* Mouse Lock */
+document.addEventListener('mousemove', event => {
+    if (!mouseLocked) return;
+
+    mouseQueueX += event.movementX;
+    mouseQueueY += event.movementY;
+
+    if (!mouseSendTimer && !mouseSending) {
+        mouseSendTimer = setTimeout(flushMouse, 35);
+    }
+});
+
+/* =====================================================
+   ĐẶT VÀ PHÁ KHỐI
+===================================================== */
+
+let placingBlock = false;
+
+async function placeBlock() {
+    if (placingBlock) return;
+
+    if (!connectedToWebsite || currentMode !== 'manual') {
+        setMessage('Hãy kết nối và bật chế độ thủ công trước.', true);
+        return;
+    }
+
+    placingBlock = true;
+    $('place-block').disabled = true;
+
+    try {
+        const result = await api('/api/game/place', {});
+
+        setMessage(result.item
+            ? `Đã đặt khối: ${result.item}`
+            : 'Đã đặt khối.');
+
+        await refreshInventory();
+    } catch (err) {
+        setMessage(err.message, true);
+    } finally {
+        placingBlock = false;
+        $('place-block').disabled = false;
+    }
+}
+
+let breakingBlock = false;
+
+async function breakBlock() {
+    if (breakingBlock) return;
+
+    if (!connectedToWebsite || currentMode !== 'manual') {
+        setMessage('Hãy kết nối và bật chế độ thủ công trước.', true);
+        return;
+    }
+
+    breakingBlock = true;
+    $('break-block').disabled = true;
+
+    try {
+        const result = await api('/api/game/break-once', {});
+
+        setMessage(result.block
+            ? `Đã phá khối: ${result.block}`
+            : 'Đã gửi lệnh phá khối.');
+
+        await refreshInventory();
+    } catch (err) {
+        setMessage(err.message, true);
+    } finally {
+        breakingBlock = false;
+        $('break-block').disabled = false;
+    }
+}
+
+$('place-block').addEventListener('click', placeBlock);
+$('break-block').addEventListener('click', breakBlock);
+
+/* =====================================================
+   TÚI ĐỒ
+===================================================== */
+
+async function refreshInventory() {
+    if (!token || !connectedToWebsite || inventoryBusy) return;
+
+    inventoryBusy = true;
+
+    try {
+        const data = await api('/api/inventory');
+
+        if (!Array.isArray(data.items)) {
+            throw new Error('API túi đồ không trả về danh sách items.');
+        }
+
+        renderInventory(data);
+    } catch (err) {
+        $('hotbar').textContent = 'Không tải được túi đồ.';
+        $('inventory-list').textContent = err.message;
+        console.error('Lỗi tải túi đồ:', err);
+    } finally {
+        inventoryBusy = false;
+    }
+}
+
+function renderInventory(data) {
+    const hotbar = $('hotbar');
+    hotbar.replaceChildren();
+
+    for (let slot = 0; slot < 9; slot++) {
+        const item = data.items.find(entry => entry.slot === slot + 36);
+
+        const button = document.createElement('button');
+        button.className = 'hotbar-slot';
+
+        if (data.selectedSlot === slot) {
+            button.classList.add('selected');
+        }
+
+        const number = document.createElement('span');
+        number.className = 'slot-number';
+        number.textContent = String(slot + 1);
+        button.appendChild(number);
+
+        const name = document.createElement('span');
+        name.textContent = item ? item.displayName : 'Trống';
+        button.appendChild(name);
+
+        if (item) {
+            const count = document.createElement('span');
+            count.className = 'slot-count';
+            count.textContent = `x${item.count}`;
+            button.appendChild(count);
+        }
+
+        button.addEventListener('click', () => selectHotbar(slot));
+        hotbar.appendChild(button);
+    }
+
+    const list = $('inventory-list');
+    list.replaceChildren();
+
+    if (!data.items.length) {
+        list.textContent = 'Túi đồ đang trống.';
+        return;
+    }
+
+    for (const item of data.items) {
+        const div = document.createElement('div');
+        div.className = 'inventory-item';
+        div.textContent =
+            `Ô ${item.slot}: ${item.displayName} × ${item.count}`;
+        list.appendChild(div);
+    }
+}
+
+async function selectHotbar(slot) {
+    if (!connectedToWebsite) {
+        setMessage('Hãy kết nối website trước.', true);
+        return;
+    }
+
+    if (currentMode !== 'manual') {
+        setMessage('Hãy bật chế độ thủ công trước khi chọn vật phẩm.', true);
+        return;
+    }
+
+    try {
+        await api('/api/inventory/select', { slot });
+        await refreshInventory();
+    } catch (err) {
+        setMessage(err.message, true);
+    }
+}
+
+$('refresh-inventory').addEventListener('click', refreshInventory);
+
+$('use-item').addEventListener('click', async () => {
+    if (!connectedToWebsite || currentMode !== 'manual') {
+        setMessage('Hãy kết nối và bật chế độ thủ công trước.', true);
+        return;
+    }
+
+    try {
+        await api('/api/game/use', {});
+        setMessage('Đã sử dụng vật phẩm.');
+    } catch (err) {
+        setMessage(err.message, true);
+    }
+});
+
+/* =====================================================
+   CHAT MINECRAFT
+===================================================== */
+
 $('chat-form').addEventListener('submit', async event => {
     event.preventDefault();
 
@@ -565,16 +1357,43 @@ $('chat-form').addEventListener('submit', async event => {
 
     if (!message) return;
 
-    await sendControl({ action: 'chat', value: message });
+    try {
+        await sendControl({ action: 'chat', value: message });
 
-    const line = document.createElement('div');
-    line.textContent = `Bạn → ${message}`;
+        const line = document.createElement('div');
+        line.textContent = `Bạn → ${message}`;
 
-    $('chat-log').appendChild(line);
-    $('chat-log').scrollTop = $('chat-log').scrollHeight;
+        $('chat-log').appendChild(line);
+        $('chat-log').scrollTop = $('chat-log').scrollHeight;
 
-    input.value = '';
+        input.value = '';
+    } catch (err) {
+        setMessage(err.message, true);
+    }
 });
+
+/* =====================================================
+   KHI RỜI TRANG
+===================================================== */
+
+function notifyPageClosing() {
+    releaseAllMovement();
+    unlockMouse();
+
+    if (token && connectedToWebsite) {
+        fetch('/api/control', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-control-token': token
+            },
+            body: JSON.stringify({ action: 'auto' }),
+            keepalive: true
+        }).catch(() => {});
+    }
+}
+
+window.addEventListener('pagehide', notifyPageClosing);
 </script>
 </body>
 </html>
