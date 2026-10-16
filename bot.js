@@ -1094,4 +1094,44 @@ process.on('unhandledRejection', err => {
     log(`Promise bị lỗi: ${err && err.stack ? err.stack : err}`);
 });
 
+
+const dns = require('node:dns');
+const net = require('node:net');
+
+async function testAternosNetwork() {
+    const host = 'the_gioi_moi.aternos.me';
+    const port = 19013;
+
+    try {
+        const addresses = await dns.promises.lookup(host, {
+            all: true
+        });
+
+        log(`[NET TEST] DNS: ${JSON.stringify(addresses)}`);
+
+        const socket = net.createConnection({ host, port });
+
+        socket.setTimeout(10000);
+
+        socket.once('connect', () => {
+            log(`[NET TEST] TCP OK: ${host}:${port}`);
+            socket.destroy();
+        });
+
+        socket.once('timeout', () => {
+            log(`[NET TEST] TCP TIMEOUT: ${host}:${port}`);
+            socket.destroy();
+        });
+
+        socket.once('error', err => {
+            log(`[NET TEST] TCP ERROR: ${err.code} - ${err.message}`);
+        });
+    } catch (err) {
+        log(`[NET TEST] DNS ERROR: ${err.message}`);
+    }
+}
+
+testAternosNetwork();
+
+
 createBot();
