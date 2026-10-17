@@ -1055,7 +1055,11 @@ app.post('/api/game/use', authenticate, async (req, res) => {
     }
 });
 
-// Proxy camera qua cổng HTTPS công khai của Render.
+
+/* =====================================================
+   CAMERA PROXY — RENDER
+===================================================== */
+
 const cameraProxy = httpProxy.createProxyServer({
     target: `http://127.0.0.1:${CAMERA_PORT}`,
     changeOrigin: true,
@@ -1075,10 +1079,14 @@ cameraProxy.on('error', (err, req, res) => {
     }
 });
 
-// /camera/ được chuyển thành / trên máy chủ viewer.
-// Những tài nguyên viewer yêu cầu ở đường dẫn gốc cũng được proxy.
+// Giữ nguyên các API và trang chính.
+// Chuyển các yêu cầu camera /camera/... đến viewer.
 app.use((req, res, next) => {
-    if (req.path.startsWith('/api/')) {
+    if (
+        req.path.startsWith('/api/') ||
+        req.path === '/' ||
+        req.path === '/index.html'
+    ) {
         return next();
     }
 
@@ -1091,6 +1099,8 @@ app.use((req, res, next) => {
         req.path === '/camera' ||
         req.path.startsWith('/camera/');
 
+    // /camera/ -> /
+    // /camera/bundle.js -> /bundle.js
     if (isCameraPath) {
         req.url = req.url.replace(/^\/camera(?=\/|$)/, '') || '/';
     }
@@ -1098,7 +1108,7 @@ app.use((req, res, next) => {
     cameraProxy.web(req, res, {}, err => {
         req.url = originalUrl;
 
-        if (!res.headersSent) {
+        if (!res.headersSent && !res.destroyed) {
             res.status(502).send(
                 `Không kết nối được camera: ${err.message}`
             );
@@ -1106,33 +1116,7 @@ app.use((req, res, next) => {
     });
 });
 
-// Chuyển tiếp WebSocket của viewer qua máy chủ website.
-server.on('upgrade', (req, socket, head) => {
-    const pathname = new URL(
-        req.url,
-        'http://localhost'
-    ).pathname;
-
-    const isCameraPath =
-        pathname === '/camera' ||
-        pathname.startsWith('/camera/');
-
-    const isViewerSocket =
-        pathname === '/socket.io' ||
-        pathname.startsWith('/socket.io/');
-
-    if (!isCameraPath && !isViewerSocket) {
-        socket.destroy();
-        return;
-    }
-
-    if (isCameraPath) {
-        req.url = req.url.replace(/^\/camera(?=\/|$)/, '') || '/';
-    }
-
-    cameraProxy.ws(req, socket, head);
-});
-
+// Khởi tạo HTTP server trước khi đăng ký upgrade.
 const server = app.listen(PORT, () => {
     log(`Website đang chạy tại cổng ${PORT}`);
 
@@ -1140,6 +1124,21 @@ const server = app.listen(PORT, () => {
         log('CẢNH BÁO: Chưa cấu hình CONTROL_TOKEN trong .env');
     }
 });
+
+// Chuyển tiếp kết nối WebSocket tới viewer.
+server.on('upgrade', (req, socket, head) => {
+    const originalUrl = req.url;
+
+    if (req.url.startsWith('/camera')) {
+        req.url = req.url.replace(/^\/camera(?=\/|$)/, '') || '/';
+    }
+
+    cameraProxy.ws(req, socket, head);
+});
+
+// =====================================================
+// GIỮ NGUYÊN function shutdown() VÀ PHẦN CÒN LẠI
+// =====================================================
 
 function shutdown() {
     stopping = true;
