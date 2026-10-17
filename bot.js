@@ -505,25 +505,19 @@ async function breakTargetBlock(bot) {
 // ĐẶT KHỐI
 // ========================================
 
-
 async function placeTargetBlock(bot) {
     if (!isConnected() || bot !== currentBot || !manualMode) {
         throw new Error('Bot chưa ở chế độ thủ công.');
     }
 
     const item = bot.heldItem;
-
     if (!item) {
-        throw new Error(
-            'Tay bot đang trống. Hãy chọn một khối trong túi đồ.'
-        );
+        throw new Error('Tay bot đang trống. Hãy chọn một khối trong túi đồ.');
     }
 
-    // Lấy vị trí mắt và hướng nhìn thực tế của bot.
     const yaw = bot.entity.yaw;
     const pitch = bot.entity.pitch;
     const eyeHeight = bot.entity.eyeHeight ?? 1.62;
-
     const eye = bot.entity.position.offset(0, eyeHeight, 0);
 
     const direction = new Vec3(
@@ -532,37 +526,28 @@ async function placeTargetBlock(bot) {
         -Math.cos(yaw) * Math.cos(pitch)
     );
 
-    // Xác định chính xác mặt khối mà bot đang ngắm.
     const hit = bot.world.raycast(eye, direction, 5);
 
     if (!hit || !hit.position || hit.face == null) {
-        throw new Error(
-            'Không tìm thấy mặt khối đang ngắm. ' +
-            'Hãy ngắm vào một khối đặc trong phạm vi 5 block.'
-        );
+        throw new Error('Không tìm thấy mặt khối đang ngắm. Hãy ngắm vào một khối đặc trong phạm vi 5 block.');
     }
 
     const block = bot.blockAt(hit.position);
 
-    if (
-        !block ||
-        block.name === 'air' ||
-        block.boundingBox === 'empty'
-    ) {
+    if (!block || block.name === 'air' || block.boundingBox === 'empty') {
         throw new Error('Khối đang ngắm không hợp lệ.');
     }
 
-    // Chuyển mặt raycast thành vector hướng.
     let face;
 
     if (typeof hit.face === 'number') {
         const faces = [
-            new Vec3(0, -1, 0), // Mặt dưới
-            new Vec3(0, 1, 0),  // Mặt trên
-            new Vec3(0, 0, -1), // Mặt Bắc
-            new Vec3(0, 0, 1),  // Mặt Nam
-            new Vec3(-1, 0, 0), // Mặt Tây
-            new Vec3(1, 0, 0)   // Mặt Đông
+            new Vec3(0, -1, 0),
+            new Vec3(0, 1, 0),
+            new Vec3(0, 0, -1),
+            new Vec3(0, 0, 1),
+            new Vec3(-1, 0, 0),
+            new Vec3(1, 0, 0)
         ];
 
         if (hit.face < 0 || hit.face >= faces.length) {
@@ -576,16 +561,11 @@ async function placeTargetBlock(bot) {
         typeof hit.face.y === 'number' &&
         typeof hit.face.z === 'number'
     ) {
-        face = new Vec3(
-            hit.face.x,
-            hit.face.y,
-            hit.face.z
-        );
+        face = new Vec3(hit.face.x, hit.face.y, hit.face.z);
     } else {
         throw new Error('Không đọc được mặt khối.');
     }
 
-    // Vị trí dự kiến đặt khối là khối liền kề theo mặt vừa ngắm.
     const targetPos = block.position.plus(face);
     const targetBlock = bot.blockAt(targetPos);
 
