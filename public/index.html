@@ -506,9 +506,7 @@ let currentMode = 'auto';
 let currentCameraMode = 'first';
 let inventoryBusy = false;
 
-const cameraUrl = () =>
-    `${location.protocol}//${location.hostname}:3007/`;
-
+const cameraUrl = () => `${location.origin}/camera/`;
 function setMessage(text, isError = false) {
     $('message').textContent = text;
     $('message').className = isError ? 'error' : 'muted';
