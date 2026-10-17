@@ -1099,27 +1099,13 @@ process.on('unhandledRejection', err => {
 
 
 const net = require('node:net');
-const dns = require('node:dns');
 
-async function testServerConnection() {
-    const host = String(config.server.ip).trim();
-    const port = Number(config.server.port);
-
-    log(`[SERVER TEST] Host trong settings.json: ${host}`);
-    log(`[SERVER TEST] Port trong settings.json: ${port}`);
-
-    try {
-        const result = await dns.promises.lookup(host);
-        log(`[DNS TEST] ${host} -> ${result.address}`);
-    } catch (err) {
-        log(`[DNS TEST] Lỗi phân giải tên miền: ${err.code} - ${err.message}`);
-    }
-
+function testTcp(host, port) {
     const socket = net.createConnection({ host, port });
     socket.setTimeout(10000);
 
     socket.once('connect', () => {
-        log(`[TCP TEST] KẾT NỐI THÀNH CÔNG ${host}:${port}`);
+        log(`[TCP TEST] OK ${host}:${port}`);
         socket.destroy();
     });
 
@@ -1129,11 +1115,10 @@ async function testServerConnection() {
     });
 
     socket.once('error', err => {
-        log(`[TCP TEST] ${err.code}: ${host}:${port} - ${err.message}`);
+        log(`[TCP TEST] ${err.code} ${host}:${port}`);
     });
 }
 
-testServerConnection();
 testTcp('the_gioi_moi.aternos.me', 19013);
 
 // Bỏ dấu // và thay bằng DynIP thật nếu Aternos cung cấp:
