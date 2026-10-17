@@ -523,6 +523,8 @@ async function placeTargetBlock(bot) {
 }
 
 function createBot() {
+    log(`Địa chỉ server Aternos: ${config.server.ip}`);
+log(`Cổng server Aternos: ${config.server.port}`);
     const bot = mineflayer.createBot({
         username: config['bot-account'].username,
         password: config['bot-account'].password,
