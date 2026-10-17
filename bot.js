@@ -521,9 +521,6 @@ async function placeTargetBlock(bot) {
 }
 
 function createBot() {
-    log(`[CONFIG TEST] Host: ${config.server.ip}`);
-    log(`[CONFIG TEST] Port: ${config.server.port}`);
-    log(`[CONFIG TEST] Version: ${config.server.version}`);
     const bot = mineflayer.createBot({
         username: config['bot-account'].username,
         password: config['bot-account'].password,
