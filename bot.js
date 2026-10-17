@@ -511,45 +511,75 @@ async function placeTargetBlock(bot) {
     }
 
     const item = bot.heldItem;
-
     if (!item) {
-        throw new Error(
-            'Tay bot đang trống. Hãy chọn một khối trong túi đồ.'
-        );
+        throw new Error('Tay bot đang trống. Hãy chọn một khối trong túi đồ.');
     }
 
-    const block = bot.blockAtCursor(5);
+    const yaw = bot.entity.yaw;
+    const pitch = bot.entity.pitch;
+    const eyeHeight = bot.entity.eyeHeight ?? 1.62;
+    const eye = bot.entity.position.offset(0, eyeHeight, 0);
 
-    if (
-        !block ||
-        block.name === 'air' ||
-        block.boundingBox === 'empty'
-    ) {
-        throw new Error(
-            'Không thấy khối để đặt cạnh. Hãy ngắm vào một khối gần bot.'
-        );
+    const direction = new Vec3(
+        -Math.sin(yaw) * Math.cos(pitch),
+        Math.sin(pitch),
+        -Math.cos(yaw) * Math.cos(pitch)
+    );
+
+    const hit = bot.world.raycast(eye, direction, 5);
+
+    if (!hit || !hit.position || hit.face == null) {
+        throw new Error('Không tìm thấy mặt khối đang ngắm. Hãy ngắm vào một khối đặc trong phạm vi 5 block.');
     }
 
-    // Tính hướng tương đối giữa mắt bot và tâm khối đang ngắm.
-    const eye = bot.entity.position.offset(0, 1.62, 0);
-    const center = block.position.offset(0.5, 0.5, 0.5);
+    const block = bot.blockAt(hit.position);
 
-    const dx = center.x - eye.x;
-    const dy = center.y - eye.y;
-    const dz = center.z - eye.z;
-
-    const ax = Math.abs(dx);
-    const ay = Math.abs(dy);
-    const az = Math.abs(dz);
+    if (!block || block.name === 'air' || block.boundingBox === 'empty') {
+        throw new Error('Khối đang ngắm không hợp lệ.');
+    }
 
     let face;
 
-    if (ay >= ax && ay >= az) {
-        face = new Vec3(0, dy < 0 ? 1 : -1, 0);
-    } else if (ax >= az) {
-        face = new Vec3(dx < 0 ? 1 : -1, 0, 0);
+    if (typeof hit.face === 'number') {
+        const faces = [
+            new Vec3(0, -1, 0),
+            new Vec3(0, 1, 0),
+            new Vec3(0, 0, -1),
+            new Vec3(0, 0, 1),
+            new Vec3(-1, 0, 0),
+            new Vec3(1, 0, 0)
+        ];
+
+        if (hit.face < 0 || hit.face >= faces.length) {
+            throw new Error('Raycast trả về mặt khối không hợp lệ.');
+        }
+
+        face = faces[hit.face];
+    } else if (
+        typeof hit.face === 'object' &&
+        typeof hit.face.x === 'number' &&
+        typeof hit.face.y === 'number' &&
+        typeof hit.face.z === 'number'
+    ) {
+        face = new Vec3(hit.face.x, hit.face.y, hit.face.z);
     } else {
-        face = new Vec3(0, 0, dz < 0 ? 1 : -1);
+        throw new Error('Không đọc được mặt khối.');
+    }
+
+    const targetPos = block.position.plus(face);
+    const targetBlock = bot.blockAt(targetPos);
+
+    if (!targetBlock) {
+        throw new Error('Không đọc được vị trí dự định đặt khối.');
+    }
+
+    if (
+        targetBlock.name !== 'air' &&
+        targetBlock.boundingBox !== 'empty'
+    ) {
+        throw new Error(
+            `Vị trí (${targetPos.x}, ${targetPos.y}, ${targetPos.z}) đã bị chiếm.`
+        );
     }
 
     try {
@@ -557,12 +587,15 @@ async function placeTargetBlock(bot) {
 
         return {
             placed: true,
-            item: item.name
+            item: item.name,
+            position: {
+                x: targetPos.x,
+                y: targetPos.y,
+                z: targetPos.z
+            }
         };
     } catch (err) {
-        throw new Error(
-            `Đặt ${item.name} thất bại: ${err.message}`
-        );
+        throw new Error(`Đặt khối thất bại: ${err.message}`);
     }
 }
 
