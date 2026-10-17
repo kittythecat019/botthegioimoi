@@ -22,6 +22,8 @@ const CONTROL_TOKEN = process.env.CONTROL_TOKEN;
 
 const HEARTBEAT_TIMEOUT = 7000;
 
+const httpProxy = require('http-proxy');
+
 app.use(express.json({ limit: '32kb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -1053,6 +1055,68 @@ app.post('/api/game/use', authenticate, async (req, res) => {
     }
 });
 
+
+/* =====================================================
+   CAMERA PROXY — RENDER
+===================================================== */
+
+const cameraProxy = httpProxy.createProxyServer({
+    target: `http://127.0.0.1:${CAMERA_PORT}`,
+    changeOrigin: true,
+    ws: true
+});
+
+cameraProxy.on('error', (err, req, res) => {
+    log(`Lỗi proxy camera: ${err.message}`);
+
+    if (res && typeof res.writeHead === 'function' && !res.headersSent) {
+        res.writeHead(502, {
+            'Content-Type': 'text/plain; charset=utf-8'
+        });
+        res.end('Camera viewer chưa sẵn sàng.');
+    } else if (res && typeof res.destroy === 'function') {
+        res.destroy();
+    }
+});
+
+// Giữ nguyên các API và trang chính.
+// Chuyển các yêu cầu camera /camera/... đến viewer.
+app.use((req, res, next) => {
+    if (
+        req.path.startsWith('/api/') ||
+        req.path === '/' ||
+        req.path === '/index.html'
+    ) {
+        return next();
+    }
+
+    if (req.method !== 'GET' && req.method !== 'HEAD') {
+        return next();
+    }
+
+    const originalUrl = req.url;
+    const isCameraPath =
+        req.path === '/camera' ||
+        req.path.startsWith('/camera/');
+
+    // /camera/ -> /
+    // /camera/bundle.js -> /bundle.js
+    if (isCameraPath) {
+        req.url = req.url.replace(/^\/camera(?=\/|$)/, '') || '/';
+    }
+
+    cameraProxy.web(req, res, {}, err => {
+        req.url = originalUrl;
+
+        if (!res.headersSent && !res.destroyed) {
+            res.status(502).send(
+                `Không kết nối được camera: ${err.message}`
+            );
+        }
+    });
+});
+
+// Khởi tạo HTTP server trước khi đăng ký upgrade.
 const server = app.listen(PORT, () => {
     log(`Website đang chạy tại cổng ${PORT}`);
 
@@ -1060,6 +1124,21 @@ const server = app.listen(PORT, () => {
         log('CẢNH BÁO: Chưa cấu hình CONTROL_TOKEN trong .env');
     }
 });
+
+// Chuyển tiếp kết nối WebSocket tới viewer.
+server.on('upgrade', (req, socket, head) => {
+    const originalUrl = req.url;
+
+    if (req.url.startsWith('/camera')) {
+        req.url = req.url.replace(/^\/camera(?=\/|$)/, '') || '/';
+    }
+
+    cameraProxy.ws(req, socket, head);
+});
+
+// =====================================================
+// GIỮ NGUYÊN function shutdown() VÀ PHẦN CÒN LẠI
+// =====================================================
 
 function shutdown() {
     stopping = true;
@@ -1093,33 +1172,5 @@ process.on('uncaughtException', err => {
 process.on('unhandledRejection', err => {
     log(`Promise bị lỗi: ${err && err.stack ? err.stack : err}`);
 });
-
-
-const net = require('node:net');
-
-function testTcp(host, port) {
-    const socket = net.createConnection({ host, port });
-    socket.setTimeout(10000);
-
-    socket.once('connect', () => {
-        log(`[TCP TEST] OK ${host}:${port}`);
-        socket.destroy();
-    });
-
-    socket.once('timeout', () => {
-        log(`[TCP TEST] TIMEOUT ${host}:${port}`);
-        socket.destroy();
-    });
-
-    socket.once('error', err => {
-        log(`[TCP TEST] ${err.code} ${host}:${port}`);
-    });
-}
-
-testTcp('the_gioi_moi.aternos.me', 19013);
-
-// Bỏ dấu // và thay bằng DynIP thật nếu Aternos cung cấp:
-// testTcp('DYNIP_HOST', 19013);
-
 
 createBot();
